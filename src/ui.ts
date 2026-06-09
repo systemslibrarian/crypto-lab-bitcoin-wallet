@@ -74,7 +74,7 @@ function renderHero(): HTMLElement {
       id: 'theme-toggle',
       class: 'theme-toggle',
       type: 'button',
-      'aria-label': 'Switch theme',
+      'aria-label': 'Switch to light theme',
       text: '🌙',
     }),
     el('p', { class: 'hero-eyebrow', text: 'Bitcoin · Wallet Mechanics' }),
