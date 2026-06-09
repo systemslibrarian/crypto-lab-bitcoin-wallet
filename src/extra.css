@@ -1,0 +1,288 @@
+/* extra.css — only NEW component classes specific to the bitcoin-wallet demo.
+   Reuses CSS variables from style.css. No hardcoded colors. */
+
+/* ---------- Key-controls panel ---------- */
+.key-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.key-warning {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  flex: 1 1 320px;
+}
+
+/* ---------- Pipeline list (key → address / mnemonic → seed) ---------- */
+.pipeline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pipeline-step {
+  padding: 14px 16px 12px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-3);
+  border-radius: var(--radius);
+}
+.pipeline-step-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.pipeline-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-soft);
+  color: var(--accent-3);
+  border: 1px solid var(--line-strong);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.pipeline-step-label {
+  font-weight: 700;
+  color: var(--ink-strong);
+  font-size: 15px;
+}
+.pipeline-step-detail {
+  margin: 6px 0 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.pipeline-step-value {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-strong);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+/* ---------- Mnemonic ---------- */
+.seed-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.mnemonic-card {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mnemonic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+.mnemonic-word {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.mnemonic-word-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.mnemonic-word-text {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+.mnemonic-phrase,
+.mnemonic-seed,
+.mnemonic-master {
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---------- Validate-mnemonic card ---------- */
+.validate-card {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.validate-help {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.mnemonic-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  color: var(--ink-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: 13px;
+  resize: vertical;
+}
+.mnemonic-input:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.validate-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Card title (shared style for nested headings) ---------- */
+.card-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--accent);
+  letter-spacing: 0;
+}
+
+/* ---------- Derivation card ---------- */
+.derive-card {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.derive-help {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.derive-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.derive-label {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.path-input,
+.index-input {
+  padding: 9px 12px;
+  background: var(--bg-soft);
+  color: var(--ink-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.path-input {
+  flex: 1 1 240px;
+}
+.index-input {
+  width: 110px;
+}
+.path-input:focus-visible,
+.index-input:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.derived-out {
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.derived-summary {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+.derived-bundle {
+  margin: 0;
+}
+.derived-bundle dt {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.derived-bundle dd {
+  margin: 3px 0 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+/* ---------- Concept / Safety cards ---------- */
+.concept-card,
+.safety-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.concept-card p,
+.safety-card p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.safety-card {
+  border-left: 3px solid var(--warning-ink);
+}
+
+/* ---------- Checksum card ---------- */
+.checksum-card {
+  margin-top: 16px;
+}
+.checksum-card p {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+/* ---------- Hero metric row (badge wrap) ---------- */
+.hero-metric-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .pipeline-step {
+    padding: 12px 12px 10px;
+  }
+  .mnemonic-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
+}
