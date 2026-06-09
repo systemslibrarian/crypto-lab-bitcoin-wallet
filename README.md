@@ -24,12 +24,13 @@ The page has two interactive flows. **Generate key** makes a fresh secp256k1 pri
 git clone https://github.com/systemslibrarian/crypto-lab-bitcoin-wallet.git
 cd crypto-lab-bitcoin-wallet
 npm install
-npm run dev      # local dev server with HMR
-npm run build    # tsc + production build to dist/
-npm run preview  # serve the built dist/ locally
+npm run dev       # local dev server with HMR
+npm run build     # tsc + production build to dist/
+npm run preview   # serve the built dist/ locally
+npm run test:e2e  # headless Chromium e2e + axe-core WCAG 2.2 a11y gate
 ```
 
-No environment variables, no API keys, no servers. Everything runs client-side. The build bundles `@noble/secp256k1` and `@noble/hashes` into a single static JS file (~60 kB) deployed straight to GitHub Pages — no remote services, no telemetry.
+No environment variables, no API keys, no servers. Everything runs client-side. The build bundles `@noble/secp256k1`, `@noble/hashes`, and the in-repo BIP-39 wordlist + QR-code encoder into a single static JS file (~73 kB) deployed straight to GitHub Pages — no remote services, no telemetry. The e2e suite drives a real Chromium through every interactive path (key generation, mnemonic generation, validate, derive, memorize-and-test, theme toggle, mobile no-overflow at 375px) and fails the build on any critical/serious axe-core WCAG violation.
 
 ## Part of the Crypto-Lab Suite
 

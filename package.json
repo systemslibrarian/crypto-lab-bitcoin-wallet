@@ -6,14 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "node tests/browser-e2e.mjs"
   },
   "dependencies": {
     "@noble/hashes": "^1.5.0",
     "@noble/secp256k1": "^2.1.0"
   },
   "devDependencies": {
+    "@axe-core/puppeteer": "^4.11.3",
+    "axe-core": "^4.12.0",
+    "puppeteer": "^25.1.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.10"
+  },
+  "allowScripts": {
+    "puppeteer@25.1.0": true
   }
 }
