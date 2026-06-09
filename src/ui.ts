@@ -492,7 +492,11 @@ function renderSafety(): HTMLElement {
 // Footer — scripture (Part D)
 // =====================================================================
 function renderFooter(): HTMLElement {
-  const footer = el('footer', { class: 'scripture-footer', role: 'contentinfo' });
+  const footer = el('footer', {
+    class: 'scripture-footer',
+    role: 'contentinfo',
+    'aria-label': 'Scripture',
+  });
   footer.append(
     el('p', { text: SCRIPTURE_TEXT }),
     el('cite', { text: `— ${SCRIPTURE_CITATION}` }),
