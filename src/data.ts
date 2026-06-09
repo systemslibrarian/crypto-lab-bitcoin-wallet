@@ -143,6 +143,52 @@ export const SAFETY: SafetyCard[] = [
 
 export const DEFAULT_DERIVATION_PATH = "m/44'/0'/0'/0/0";
 
+// Per-step gloss of the BIP-44 layout for the derivation-tree visual.
+export interface PathStep {
+  segment: string;
+  name: string;
+  detail: string;
+  hardened: boolean;
+}
+export const PATH_STEPS: PathStep[] = [
+  {
+    segment: 'm',
+    name: 'Master',
+    detail: 'The BIP-32 root key derived from the seed. Everything hangs off this node.',
+    hardened: false,
+  },
+  {
+    segment: "44'",
+    name: 'Purpose',
+    detail: "BIP-44 layout (' = hardened). Tells wallets this is a P2PKH-style account tree.",
+    hardened: true,
+  },
+  {
+    segment: "0'",
+    name: 'Coin',
+    detail: "Bitcoin mainnet is 0 (hardened). Litecoin would be 2', Testnet 1', etc.",
+    hardened: true,
+  },
+  {
+    segment: "0'",
+    name: 'Account',
+    detail: "Your first account (hardened so accounts are independent — leaking one doesn't leak siblings).",
+    hardened: true,
+  },
+  {
+    segment: '0',
+    name: 'Change',
+    detail: '0 = receive addresses you give to senders, 1 = internal change addresses. Non-hardened so an xpub can watch.',
+    hardened: false,
+  },
+  {
+    segment: '0',
+    name: 'Index',
+    detail: 'The address index. Bump it to get a fresh receive address from the same seed.',
+    hardened: false,
+  },
+];
+
 export const SCRIPTURE_TEXT =
   '"So whether you eat or drink or whatever you do, do it all for the glory of God."';
 export const SCRIPTURE_CITATION = '1 Corinthians 10:31';

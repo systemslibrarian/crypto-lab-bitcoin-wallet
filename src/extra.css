@@ -66,12 +66,127 @@
   font-size: 13.5px;
   color: var(--ink);
 }
+.pipeline-step-value-wrap {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
 .pipeline-step-value {
   margin: 0;
   font-size: 12.5px;
   color: var(--ink-strong);
   word-break: break-all;
   white-space: pre-wrap;
+  flex: 1 1 auto;
+}
+
+/* ---------- Copy button ---------- */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--panel-strong);
+  color: var(--ink-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.copy-btn:hover {
+  background: var(--bg-soft);
+  filter: none;
+}
+.copy-btn:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.copy-btn svg {
+  flex: 0 0 auto;
+}
+.copy-btn--ok {
+  background: var(--pass-bg);
+  color: var(--pass-ink);
+  border-color: var(--pass-ink);
+}
+.copy-row {
+  display: grid;
+  grid-template-columns: minmax(140px, auto) 1fr;
+  gap: 8px 12px;
+  align-items: start;
+  margin: 6px 0 0;
+}
+.copy-row dt {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding-top: 6px;
+}
+.copy-row dd {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.copy-row-value {
+  flex: 1 1 auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  word-break: break-all;
+  padding-top: 4px;
+}
+
+/* ---------- QR cards ---------- */
+.qr-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+.qr-card {
+  padding: 16px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.qr-card-title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent-2);
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.qr-svg {
+  background: var(--bg);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  /* The SVG path uses currentColor, so module color follows ink-strong */
+  color: var(--ink-strong);
+  line-height: 0;
+}
+[data-theme='light'] .qr-svg {
+  background: #ffffff;
+  color: #000000;
+}
+.qr-card-value {
+  font-size: 11.5px;
+  color: var(--ink);
+  word-break: break-all;
+  text-align: center;
 }
 
 /* ---------- Mnemonic ---------- */
@@ -112,6 +227,12 @@
   color: var(--ink-strong);
   font-weight: 600;
 }
+.mnemonic-phrase-row,
+.mnemonic-line-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
 .mnemonic-phrase,
 .mnemonic-seed,
 .mnemonic-master {
@@ -123,6 +244,7 @@
   color: var(--ink);
   white-space: pre-wrap;
   word-break: break-all;
+  flex: 1 1 auto;
 }
 
 /* ---------- Validate-mnemonic card ---------- */
@@ -159,7 +281,7 @@
   flex-wrap: wrap;
 }
 
-/* ---------- Card title (shared style for nested headings) ---------- */
+/* ---------- Card title shared ---------- */
 .card-title {
   margin: 0 0 6px;
   font-size: 15px;
@@ -212,6 +334,15 @@
 .index-input:focus-visible {
   outline: 2px solid var(--accent-2);
   outline-offset: 2px;
+}
+.derive-keyboard-hint {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--metric-bg);
+  border-radius: var(--radius-sm);
+  font-style: italic;
 }
 .derived-out {
   margin-top: 8px;
@@ -270,7 +401,7 @@
   color: var(--ink);
 }
 
-/* ---------- Hero metric row (badge wrap) ---------- */
+/* ---------- Hero metric row ---------- */
 .hero-metric-row {
   display: flex;
   flex-wrap: wrap;
@@ -278,11 +409,293 @@
   gap: 8px;
 }
 
+/* ---------- Derivation tree visual ---------- */
+.tree-card {
+  margin: 0 0 16px;
+}
+.tree-help {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.derivation-tree {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+}
+.tree-node {
+  flex: 1 1 130px;
+  min-width: 130px;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tree-node--hardened {
+  border-left-color: var(--accent-3);
+}
+.tree-node-segment {
+  font-size: 18px;
+  color: var(--ink-strong);
+  font-weight: 700;
+}
+.tree-node-name {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.tree-node-detail {
+  font-size: 12px;
+  color: var(--ink);
+}
+.tree-arrow {
+  align-self: center;
+  color: var(--ink-soft);
+  font-size: 18px;
+  font-family: var(--mono);
+}
+@media (max-width: 760px) {
+  .derivation-tree {
+    flex-direction: column;
+  }
+  .tree-arrow {
+    align-self: flex-start;
+    transform: rotate(90deg);
+    margin-left: 12px;
+  }
+}
+
+/* ---------- Memorize-and-test ---------- */
+.memorize-card {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.memorize-help {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.memorize-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.memorize-status {
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--metric-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink);
+  min-height: 32px;
+}
+.memorize-slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+.memorize-slot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  min-height: 36px;
+}
+.memorize-slot--ok {
+  border-style: solid;
+  border-color: var(--pass-ink);
+  background: var(--pass-bg);
+}
+.memorize-slot--err {
+  border-color: var(--fail-ink);
+  background: var(--fail-bg);
+}
+.memorize-slot-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.memorize-slot-word {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink-strong);
+}
+.memorize-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.memorize-chip {
+  padding: 8px 12px;
+  min-height: 36px;
+  background: var(--panel-strong);
+  color: var(--ink-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 13px;
+  cursor: pointer;
+}
+.memorize-chip:hover {
+  background: var(--bg-soft);
+  filter: none;
+}
+.memorize-chip:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.memorize-chip--used {
+  opacity: 0.35;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+/* ---------- Address-list card (5 addresses at a glance) ---------- */
+.address-list-card {
+  margin-top: 16px;
+}
+.address-list-help {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.address-list-table {
+  font-size: 12.5px;
+}
+.address-list-table .mono {
+  word-break: break-all;
+}
+.address-list-empty {
+  text-align: center;
+  color: var(--ink-soft);
+  font-style: italic;
+  padding: 18px 12px;
+}
+.address-list-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  white-space: nowrap;
+}
+.address-list-actions .copy-btn {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+
 @media (max-width: 600px) {
   .pipeline-step {
     padding: 12px 12px 10px;
   }
+  .pipeline-step-value-wrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pipeline-step-value-wrap .copy-btn {
+    align-self: flex-end;
+  }
   .mnemonic-grid {
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
+  .copy-row {
+    grid-template-columns: 1fr;
+  }
+  .copy-row .copy-btn {
+    justify-self: end;
+  }
+}
+
+/* ---------- Print stylesheet (Item 10) ---------- */
+@media print {
+  :root,
+  [data-theme='dark'],
+  [data-theme='light'] {
+    --bg: #ffffff;
+    --bg-soft: #ffffff;
+    --panel: #ffffff;
+    --panel-strong: #ffffff;
+    --line: rgba(0, 0, 0, 0.25);
+    --line-strong: rgba(0, 0, 0, 0.5);
+    --ink-strong: #000000;
+    --ink: #000000;
+    --ink-soft: #333333;
+    --accent: #000000;
+    --accent-2: #000000;
+    --accent-3: #000000;
+    --accent-4: #000000;
+    --warning-bg: transparent;
+    --warning-ink: #000000;
+    --metric-bg: transparent;
+    --pass-bg: transparent;
+    --pass-ink: #000000;
+    --fail-bg: transparent;
+    --fail-ink: #000000;
+    --pending-bg: transparent;
+    --pending-ink: #000000;
+    --shadow-1: none;
+    --shadow-2: none;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .theme-toggle,
+  .copy-btn,
+  .key-controls button,
+  .seed-controls button,
+  .memorize-controls,
+  .derive-row button,
+  #validate-input,
+  .validate-row button,
+  .skip-link {
+    display: none !important;
+  }
+  .lab-section,
+  .hero-panel,
+  .panel-card,
+  .pipeline-step,
+  .qr-card,
+  .tree-node {
+    box-shadow: none !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    border: 1px solid #000000 !important;
+  }
+  .qr-svg {
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+  pre,
+  .mono {
+    white-space: pre-wrap !important;
+    word-break: break-all;
+  }
+  a {
+    color: #000000 !important;
+    text-decoration: underline;
+  }
+  /* Show the live URL alongside the live-demo link when printed */
+  .hero-panel::after {
+    content: 'Live: https://systemslibrarian.github.io/crypto-lab-bitcoin-wallet/';
+    display: block;
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
   }
 }

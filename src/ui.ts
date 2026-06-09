@@ -18,12 +18,16 @@ import {
   SEED_STEPS,
   CONCEPTS,
   SAFETY,
+  PATH_STEPS,
   DEFAULT_DERIVATION_PATH,
   SCRIPTURE_TEXT,
   SCRIPTURE_CITATION,
 } from './data';
+import { encodeQR, renderQRSVG } from './qr';
 
-// Tiny DOM helper in the sibling-demo style.
+// =====================================================================
+// Tiny DOM helper
+// =====================================================================
 type Attrs = Record<string, string | boolean | number | undefined> & {
   text?: string;
   html?: string;
@@ -47,6 +51,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
     ) {
       node.setAttribute(k, String(v));
     } else if (k === 'id') node.id = String(v);
+    else if (k === 'for') node.setAttribute('for', String(v));
     else node.setAttribute(k, String(v));
   }
   if (text !== undefined) node.textContent = text;
@@ -56,7 +61,89 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-// ---- demo state ----
+// =====================================================================
+// Live-announce region (single shared aria-live="polite" sink so SR users
+// hear ad-hoc status messages without us sprinkling regions everywhere).
+// =====================================================================
+let announceTarget: HTMLElement | null = null;
+function announce(msg: string): void {
+  if (!announceTarget) return;
+  // Clear-then-set so identical consecutive messages still trigger AT.
+  announceTarget.textContent = '';
+  setTimeout(() => {
+    if (announceTarget) announceTarget.textContent = msg;
+  }, 30);
+}
+
+// =====================================================================
+// Copy-to-clipboard helper — inline icon button paired with any value.
+// =====================================================================
+function copyButton(getValue: () => string, label: string): HTMLButtonElement {
+  const btn = el('button', {
+    type: 'button',
+    class: 'copy-btn secondary',
+    'aria-label': `Copy ${label} to clipboard`,
+    title: `Copy ${label}`,
+  });
+  // SVG icon — outline copy glyph, currentColor.
+  btn.innerHTML =
+    '<svg aria-hidden="true" focusable="false" viewBox="0 0 16 16" width="14" height="14">' +
+    '<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" ' +
+    'd="M5 2h7v9H5zM3 5h2v9h7"/></svg><span class="copy-btn-text">Copy</span>';
+  btn.addEventListener('click', async () => {
+    const value = getValue();
+    try {
+      await navigator.clipboard.writeText(value);
+      btn.classList.add('copy-btn--ok');
+      const span = btn.querySelector<HTMLSpanElement>('.copy-btn-text');
+      const prev = span ? span.textContent : null;
+      if (span) span.textContent = 'Copied';
+      announce(`${label} copied to clipboard`);
+      setTimeout(() => {
+        btn.classList.remove('copy-btn--ok');
+        if (span) span.textContent = prev ?? 'Copy';
+      }, 1400);
+    } catch {
+      announce(`Copy failed — your browser blocked clipboard access`);
+    }
+  });
+  return btn;
+}
+
+// Convenience: a row with a label, monospace value, and copy button.
+// Structured as <div><dt><dd> where the button lives INSIDE the <dd>, so
+// the parent <dl> never has non-list-item direct descendants (axe-friendly).
+function copyRow(label: string, value: string): HTMLElement {
+  const row = el('div', { class: 'copy-row' });
+  const dd = el('dd', {});
+  dd.append(
+    el('span', { class: 'mono copy-row-value', text: value }),
+    copyButton(() => value, label),
+  );
+  row.append(el('dt', { text: label }), dd);
+  return row;
+}
+
+// =====================================================================
+// QR-code panel — renders inline SVG from src/qr.ts.
+// =====================================================================
+function qrPanel(label: string, value: string): HTMLElement {
+  const card = el('div', { class: 'qr-card' });
+  card.append(el('h4', { class: 'qr-card-title', text: label }));
+  const svg = renderQRSVG(encodeQR(value), {
+    size: 168,
+    quietZone: 3,
+    ariaLabel: `${label} QR code`,
+  });
+  const holder = el('div', { class: 'qr-svg', html: svg });
+  card.append(holder, el('div', { class: 'mono qr-card-value', text: value }));
+  card.append(copyButton(() => value, label));
+  return card;
+}
+
+// =====================================================================
+// State
+// =====================================================================
 interface SeedState {
   mnemonic: string | null;
   seed: Uint8Array | null;
@@ -68,7 +155,6 @@ interface SeedState {
 // =====================================================================
 function renderHero(): HTMLElement {
   const hero = el('section', { class: 'hero-panel', role: 'banner' });
-
   hero.append(
     el('button', {
       id: 'theme-toggle',
@@ -101,12 +187,11 @@ function renderHero(): HTMLElement {
     }),
   );
   hero.append(details);
-
   return hero;
 }
 
 // =====================================================================
-// Section 2 — Key → Address
+// Key → Address
 // =====================================================================
 function renderKeyToAddress(): HTMLElement {
   const section = el('section', { class: 'lab-section', 'aria-labelledby': 'key-h2' });
@@ -134,6 +219,12 @@ function renderKeyToAddress(): HTMLElement {
   controls.append(generateBtn, warning);
   section.append(controls);
 
+  // aria-live wrapper around all stage values
+  const pipelineLive = el('div', {
+    class: 'pipeline-live',
+    'aria-live': 'polite',
+    'aria-atomic': 'false',
+  });
   const pipelineList = el('ol', { class: 'pipeline-list' });
   for (const step of PIPELINE_STEPS) {
     const li = el('li', { class: 'pipeline-step' });
@@ -143,37 +234,62 @@ function renderKeyToAddress(): HTMLElement {
         el('span', { class: 'pipeline-step-label', text: step.label }),
       ]),
       el('p', { class: 'pipeline-step-detail', text: step.detail }),
-      el('pre', { class: 'pipeline-step-value mono', text: '—', 'data-step': String(step.ordinal) }),
     );
+    const valueWrap = el('div', { class: 'pipeline-step-value-wrap' });
+    const value = el('pre', {
+      class: 'pipeline-step-value mono',
+      text: '—',
+      'data-step': String(step.ordinal),
+    });
+    valueWrap.append(value);
+    li.append(valueWrap);
     pipelineList.append(li);
   }
-  section.append(pipelineList);
+  pipelineLive.append(pipelineList);
+  section.append(pipelineLive);
+
+  // QR row for the two real addresses — shown after first generation.
+  const qrRow = el('div', { class: 'qr-row', 'aria-live': 'polite' });
+  section.append(qrRow);
 
   function fillPipeline(bundle: AddressBundle): void {
-    const values = [
-      `priv hex   ${bundle.privKeyHex}\nWIF        ${bundle.wif}`,
-      `pubkey (compressed, 33 bytes)\n${bundle.pubKeyHex}`,
-      `HASH160 (20 bytes)\n${bundle.hash160Hex}`,
-      `P2PKH (mainnet)\n${bundle.p2pkh}`,
-      `P2WPKH (mainnet, BIP-173)\n${bundle.p2wpkh}`,
+    const blocks: { value: string; copy: string }[] = [
+      {
+        value: `priv hex   ${bundle.privKeyHex}\nWIF        ${bundle.wif}`,
+        copy: bundle.privKeyHex,
+      },
+      { value: `pubkey (compressed, 33 bytes)\n${bundle.pubKeyHex}`, copy: bundle.pubKeyHex },
+      { value: `HASH160 (20 bytes)\n${bundle.hash160Hex}`, copy: bundle.hash160Hex },
+      { value: `P2PKH (mainnet)\n${bundle.p2pkh}`, copy: bundle.p2pkh },
+      { value: `P2WPKH (mainnet, BIP-173)\n${bundle.p2wpkh}`, copy: bundle.p2wpkh },
     ];
-    const slots = pipelineList.querySelectorAll<HTMLElement>('.pipeline-step-value');
-    slots.forEach((slot, idx) => {
-      slot.textContent = values[idx] ?? '—';
+    const labels = ['private key', 'public key', 'HASH160', 'P2PKH address', 'P2WPKH address'];
+    pipelineList.querySelectorAll<HTMLElement>('.pipeline-step-value-wrap').forEach((wrap, idx) => {
+      wrap.replaceChildren();
+      const pre = el('pre', {
+        class: 'pipeline-step-value mono',
+        text: blocks[idx]?.value ?? '—',
+        'data-step': String(idx + 1),
+      });
+      const btn = copyButton(() => blocks[idx]?.copy ?? '', labels[idx]);
+      wrap.append(pre, btn);
     });
+
+    qrRow.replaceChildren(qrPanel('P2PKH', bundle.p2pkh), qrPanel('P2WPKH', bundle.p2wpkh));
+    announce(
+      `Fresh key derived. P2PKH ${bundle.p2pkh.slice(0, 6)} ellipsis. P2WPKH ${bundle.p2wpkh.slice(0, 8)} ellipsis.`,
+    );
   }
 
   generateBtn.addEventListener('click', () => {
     try {
       const priv = randomPrivateKey();
-      const bundle = deriveAddress(priv);
-      fillPipeline(bundle);
+      fillPipeline(deriveAddress(priv));
     } catch (err) {
       console.error('Generate key failed:', err);
     }
   });
 
-  // Derive once on load so the panel isn't empty.
   try {
     fillPipeline(deriveAddress(randomPrivateKey()));
   } catch (err) {
@@ -184,7 +300,198 @@ function renderKeyToAddress(): HTMLElement {
 }
 
 // =====================================================================
-// Section 3 — Seed phrase → wallet
+// Derivation-tree visual (Item 8)
+// =====================================================================
+function renderDerivationTree(): HTMLElement {
+  const tree = el('div', { class: 'derivation-tree', 'aria-label': 'BIP-44 derivation path' });
+  PATH_STEPS.forEach((step, i) => {
+    const node = el('div', {
+      class: 'tree-node' + (step.hardened ? ' tree-node--hardened' : ''),
+    });
+    node.append(
+      el('span', { class: 'tree-node-segment mono', text: step.segment }),
+      el('span', { class: 'tree-node-name', text: step.name }),
+      el('span', { class: 'tree-node-detail', text: step.detail }),
+    );
+    tree.append(node);
+    if (i < PATH_STEPS.length - 1) {
+      tree.append(el('span', { class: 'tree-arrow', 'aria-hidden': 'true', text: '→' }));
+    }
+  });
+  return tree;
+}
+
+// =====================================================================
+// Memorize-and-test (Item 7)
+// =====================================================================
+function renderMemorizeMode(getWords: () => string[]): HTMLElement {
+  const card = el('div', { class: 'panel-card memorize-card' });
+  card.append(
+    el('h3', { class: 'card-title', text: 'Test yourself' }),
+    el('p', {
+      class: 'memorize-help',
+      text:
+        'A backup you cannot recall is no backup. Generate a mnemonic above, then click Start — the words hide and reappear shuffled below. Click them in the right order. Real wallets walk users through this exact drill on first setup.',
+    }),
+  );
+
+  const liveStatus = el('p', { class: 'memorize-status', 'aria-live': 'polite' });
+  const slots = el('ol', { class: 'memorize-slots' });
+  const bank = el('div', {
+    class: 'memorize-bank',
+    role: 'group',
+    'aria-label': 'Shuffled words to choose from',
+  });
+  const startBtn = el('button', { type: 'button', text: 'Start the drill', class: 'secondary' });
+  const resetBtn = el('button', { type: 'button', text: 'Reset', class: 'secondary' });
+  const resetRow = el('div', { class: 'memorize-controls' }, [startBtn, resetBtn]);
+
+  let target: string[] = [];
+  let placed: number = 0;
+
+  function reset(): void {
+    target = [];
+    placed = 0;
+    slots.replaceChildren();
+    bank.replaceChildren();
+    liveStatus.textContent = '';
+  }
+
+  function build(): void {
+    reset();
+    target = getWords();
+    if (target.length === 0) {
+      liveStatus.textContent = 'Generate a mnemonic above first.';
+      announce('Generate a mnemonic above before starting the drill.');
+      return;
+    }
+    target.forEach((_, i) => {
+      const slot = el('li', { class: 'memorize-slot', 'data-idx': String(i) });
+      slot.append(el('span', { class: 'memorize-slot-num', text: String(i + 1).padStart(2, '0') }));
+      slot.append(el('span', { class: 'memorize-slot-word', text: '—' }));
+      slots.append(slot);
+    });
+    const shuffled = target.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    for (const word of shuffled) {
+      const chip = el('button', {
+        type: 'button',
+        class: 'memorize-chip',
+        text: word,
+        'data-word': word,
+      });
+      chip.addEventListener('click', () => choose(chip, word));
+      bank.append(chip);
+    }
+    liveStatus.textContent = 'Drill started — click the words in order.';
+    announce('Drill started. Click the words in their original order.');
+  }
+
+  function choose(chip: HTMLButtonElement, word: string): void {
+    if (placed >= target.length) return;
+    const expected = target[placed];
+    const slot = slots.querySelector<HTMLElement>(`[data-idx="${placed}"]`);
+    if (!slot) return;
+    const slotWord = slot.querySelector<HTMLElement>('.memorize-slot-word');
+    if (slotWord) slotWord.textContent = word;
+    if (word === expected) {
+      slot.classList.add('memorize-slot--ok');
+      chip.disabled = true;
+      chip.classList.add('memorize-chip--used');
+      placed++;
+      if (placed === target.length) {
+        liveStatus.textContent = '✓ Perfect — every word in order.';
+        announce('Drill complete. Every word was placed correctly.');
+      } else {
+        liveStatus.textContent = `Placed ${placed} of ${target.length}.`;
+      }
+    } else {
+      slot.classList.add('memorize-slot--err');
+      announce(`Wrong word for slot ${placed + 1}. Expected ${expected}.`);
+      liveStatus.textContent = `That word is out of order for slot ${placed + 1}. Try again.`;
+      setTimeout(() => {
+        slot.classList.remove('memorize-slot--err');
+        if (slotWord) slotWord.textContent = '—';
+      }, 1200);
+    }
+  }
+
+  startBtn.addEventListener('click', build);
+  resetBtn.addEventListener('click', reset);
+
+  card.append(resetRow, liveStatus, slots, bank);
+  return card;
+}
+
+// =====================================================================
+// 5-address HD view (Item 6)
+// =====================================================================
+function renderAddressList(getSeed: () => Uint8Array | null, basePath: string): HTMLElement {
+  const card = el('div', { class: 'panel-card address-list-card' });
+  card.append(
+    el('h3', { class: 'card-title', text: 'Your first five receive addresses' }),
+    el('p', {
+      class: 'address-list-help',
+      text: `Same seed, indices 0–4 of ${basePath.replace(/\/\d+$/, '/n')}. Wallets call .getNextAddress() exactly this way — a fresh address every time, all from one backup.`,
+    }),
+  );
+
+  const table = el('table', { class: 'math-table address-list-table' });
+  table.append(
+    el('thead', {}, [
+      el('tr', {}, [
+        el('th', { text: 'Index' }),
+        el('th', { text: 'P2PKH (1…)' }),
+        el('th', { text: 'P2WPKH (bc1…)' }),
+        el('th', { text: '' }),
+      ]),
+    ]),
+  );
+  const tbody = el('tbody', { 'aria-live': 'polite' });
+  table.append(tbody);
+  card.append(el('div', { class: 'table-wrap', tabindex: '0' }, [table]));
+
+  function refresh(): void {
+    const seed = getSeed();
+    tbody.replaceChildren();
+    if (!seed) {
+      const row = el('tr', {}, [
+        el('td', { colspan: '4', class: 'address-list-empty', text: 'Generate a mnemonic above to see the first five addresses derived from one seed.' }),
+      ]);
+      tbody.append(row);
+      return;
+    }
+    const parts = basePath.split('/');
+    for (let i = 0; i < 5; i++) {
+      parts[parts.length - 1] = String(i);
+      const path = parts.join('/');
+      const hd = derivePath(seed, path);
+      const bundle = deriveAddress(hd.privateKey);
+      const row = el('tr', {});
+      row.append(
+        el('td', { class: 'mono', text: String(i) }),
+        el('td', { class: 'mono', text: bundle.p2pkh }),
+        el('td', { class: 'mono', text: bundle.p2wpkh }),
+      );
+      const actions = el('td', { class: 'address-list-actions' });
+      actions.append(
+        copyButton(() => bundle.p2pkh, `P2PKH at index ${i}`),
+        copyButton(() => bundle.p2wpkh, `P2WPKH at index ${i}`),
+      );
+      row.append(actions);
+      tbody.append(row);
+    }
+  }
+
+  refresh();
+  return Object.assign(card, { refresh });
+}
+
+// =====================================================================
+// Seed phrase → wallet
 // =====================================================================
 function renderSeedSection(): HTMLElement {
   const section = el('section', { class: 'lab-section', 'aria-labelledby': 'seed-h2' });
@@ -199,7 +506,7 @@ function renderSeedSection(): HTMLElement {
     }),
   );
 
-  // ---- Pipeline cards (BIP-39/BIP-32 chain) ----
+  // Pipeline (BIP-39/BIP-32 chain)
   const chain = el('ol', { class: 'pipeline-list' });
   for (const step of SEED_STEPS) {
     const li = el('li', { class: 'pipeline-step' });
@@ -214,24 +521,54 @@ function renderSeedSection(): HTMLElement {
   }
   section.append(chain);
 
-  // ---- Generate mnemonic + show stretching ----
+  // Derivation-tree visual (Item 8)
+  section.append(
+    el('div', { class: 'panel-card tree-card' }, [
+      el('h3', { class: 'card-title', text: 'BIP-44 path breakdown' }),
+      el('p', {
+        class: 'tree-help',
+        text: 'The default path is more than a string — each segment encodes a wallet decision.',
+      }),
+      renderDerivationTree(),
+    ]),
+  );
+
   const state: SeedState = { mnemonic: null, seed: null, master: null };
 
+  // Generate-mnemonic control
   const generateRow = el('div', { class: 'panel-card seed-controls' });
   const genBtn = el('button', { type: 'button', text: 'Generate mnemonic (12 words)' });
   generateRow.append(genBtn);
   section.append(generateRow);
 
-  const mnemonicCard = el('div', { class: 'panel-card mnemonic-card' });
-  const mnemonicTitle = el('h3', { class: 'card-title', text: 'Your fresh mnemonic' });
+  // Mnemonic card
+  const mnemonicCard = el('div', { class: 'panel-card mnemonic-card', 'aria-live': 'polite' });
+  mnemonicCard.append(el('h3', { class: 'card-title', text: 'Your fresh mnemonic' }));
   const wordGrid = el('div', { class: 'mnemonic-grid', role: 'list' });
+  const phraseRow = el('div', { class: 'mnemonic-phrase-row' });
   const phraseLine = el('div', { class: 'mono mnemonic-phrase', text: '— click Generate —' });
+  phraseRow.append(phraseLine);
+  const phraseCopy = copyButton(() => state.mnemonic ?? '', 'mnemonic phrase');
+  phraseRow.append(phraseCopy);
+  const seedRow = el('div', { class: 'mnemonic-line-row' });
   const seedLine = el('div', { class: 'mono mnemonic-seed', text: 'seed: —' });
+  seedRow.append(seedLine, copyButton(() => (state.seed ? bytesToHex(state.seed) : ''), 'BIP-39 seed (hex)'));
+  const masterRow = el('div', { class: 'mnemonic-line-row' });
   const masterLine = el('div', { class: 'mono mnemonic-master', text: 'BIP-32 master priv: —' });
-  mnemonicCard.append(mnemonicTitle, wordGrid, phraseLine, seedLine, masterLine);
+  masterRow.append(
+    masterLine,
+    copyButton(() => (state.master ? bytesToHex(state.master.privateKey) : ''), 'BIP-32 master private key'),
+  );
+  mnemonicCard.append(wordGrid, phraseRow, seedRow, masterRow);
   section.append(mnemonicCard);
 
-  // ---- Validate-mnemonic input ----
+  // Memorize-and-test (Item 7)
+  const memorize = renderMemorizeMode(() =>
+    state.mnemonic ? state.mnemonic.split(/\s+/) : [],
+  );
+  section.append(memorize);
+
+  // Validate-mnemonic
   const validateCard = el('div', { class: 'panel-card validate-card' });
   validateCard.append(
     el('h3', { class: 'card-title', text: 'Validate a mnemonic' }),
@@ -241,61 +578,76 @@ function renderSeedSection(): HTMLElement {
         'Paste a 12/15/18/21/24-word phrase to see the BIP-39 checksum check pass or fail. (Do not paste a real wallet phrase — never expose a phrase that controls real funds.)',
     }),
   );
+  validateCard.append(
+    el('label', { class: 'visually-hidden', for: 'validate-input', text: 'Mnemonic to validate' }),
+  );
   const validateInput = el('textarea', {
+    id: 'validate-input',
     class: 'mnemonic-input mono',
     rows: 2,
     placeholder: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
-    'aria-label': 'Mnemonic to validate',
   });
   const validateBtn = el('button', { type: 'button', text: 'Validate', class: 'secondary' });
   const validateStatus = el('span', {
     class: 'scenario-status scenario-status--pending',
     text: 'awaiting input',
+    'aria-live': 'polite',
   });
-  const validateRow = el('div', { class: 'validate-row' }, [validateBtn, validateStatus]);
-  validateCard.append(validateInput, validateRow);
+  validateCard.append(validateInput, el('div', { class: 'validate-row' }, [validateBtn, validateStatus]));
   section.append(validateCard);
 
-  // ---- Derivation path ----
+  // Derive-along-path
   const deriveCard = el('div', { class: 'panel-card derive-card' });
   deriveCard.append(
     el('h3', { class: 'card-title', text: 'Walk a derivation path' }),
     el('p', {
       class: 'derive-help',
       text:
-        "After generating a mnemonic above, the path field is unlocked. The default path m/44'/0'/0'/0/0 is the first receive address of the first account of the legacy BIP-44 layout. Bump the last index to see the next address from the same seed.",
+        "After generating a mnemonic above, the path field is unlocked. The default path m/44'/0'/0'/0/0 is the first receive address of the first account of the legacy BIP-44 layout.",
     }),
   );
+
+  const pathLabel = el('label', { class: 'derive-label', for: 'path-input', text: 'Path' });
   const pathInput = el('input', {
     type: 'text',
+    id: 'path-input',
     class: 'mono path-input',
     value: DEFAULT_DERIVATION_PATH,
-    'aria-label': 'BIP-32 derivation path',
   });
+  const indexLabel = el('label', { class: 'derive-label', for: 'index-input', text: 'Receive index' });
   const indexInput = el('input', {
     type: 'number',
+    id: 'index-input',
     class: 'mono index-input',
     value: '0',
     min: 0,
     max: 2147483647,
-    'aria-label': 'Receive index to overwrite the last path component',
   });
   const deriveBtn = el('button', { type: 'button', text: 'Derive address', class: 'secondary' });
-  const deriveRow = el('div', { class: 'derive-row' }, [
-    el('label', { class: 'derive-label', text: 'Path' }),
-    pathInput,
-    el('label', { class: 'derive-label', text: 'Receive index' }),
-    indexInput,
-    deriveBtn,
-  ]);
-  deriveCard.append(deriveRow);
+  deriveCard.append(
+    el('div', { class: 'derive-row' }, [pathLabel, pathInput, indexLabel, indexInput, deriveBtn]),
+    el('p', {
+      class: 'derive-keyboard-hint',
+      text: 'Tip: focus the receive index and press ↑/↓ to step through the next addresses from the same seed.',
+    }),
+  );
 
-  const derivedOut = el('div', { class: 'derived-out' });
-  const derivedSummary = el('div', { class: 'mono derived-summary', text: 'Generate a mnemonic above to begin.' });
+  const derivedOut = el('div', { class: 'derived-out', 'aria-live': 'polite' });
+  const derivedSummary = el('div', {
+    class: 'mono derived-summary',
+    text: 'Generate a mnemonic above to begin.',
+  });
   const derivedBundle = el('dl', { class: 'derived-bundle' });
   derivedOut.append(derivedSummary, derivedBundle);
   deriveCard.append(derivedOut);
+  // QR pair for the derived path
+  const derivedQrRow = el('div', { class: 'qr-row', 'aria-live': 'polite' });
+  deriveCard.append(derivedQrRow);
   section.append(deriveCard);
+
+  // 5-address HD view (Item 6)
+  const addressList = renderAddressList(() => state.seed, DEFAULT_DERIVATION_PATH);
+  section.append(addressList);
 
   // ---- behaviour ----
   function renderMnemonic(mnemonic: string): void {
@@ -322,12 +674,14 @@ function renderSeedSection(): HTMLElement {
       '\nchain code:\n' +
       bytesToHex(state.master.chainCode);
 
-    // Auto-derive default address once.
+    announce('Fresh 12-word mnemonic generated. Seed and master key derived.');
     derive();
+    (addressList as unknown as { refresh: () => void }).refresh();
   }
 
   function derive(): void {
     derivedBundle.replaceChildren();
+    derivedQrRow.replaceChildren();
     if (!state.seed) {
       derivedSummary.textContent = 'Generate a mnemonic above to begin.';
       return;
@@ -335,12 +689,13 @@ function renderSeedSection(): HTMLElement {
     let basePath = pathInput.value.trim();
     if (!basePath.startsWith('m')) {
       derivedSummary.textContent = "Path must start with 'm', e.g. m/44'/0'/0'/0/0";
+      announce("Invalid path. It must start with m.");
       return;
     }
-    // Replace the final path component with the user's index.
     const indexValue = Number(indexInput.value);
     if (!Number.isFinite(indexValue) || indexValue < 0) {
       derivedSummary.textContent = 'Index must be a non-negative integer.';
+      announce('Index must be a non-negative integer.');
       return;
     }
     const parts = basePath.split('/');
@@ -348,36 +703,33 @@ function renderSeedSection(): HTMLElement {
       parts[parts.length - 1] = String(indexValue);
       basePath = parts.join('/');
     }
-
     let hdKey: HDKey;
     try {
       hdKey = derivePath(state.seed, basePath);
     } catch (err) {
       derivedSummary.textContent = 'Path error: ' + (err instanceof Error ? err.message : String(err));
+      announce('Path error: ' + (err instanceof Error ? err.message : 'unknown'));
       return;
     }
     const bundle = deriveAddress(hdKey.privateKey);
     derivedSummary.textContent = 'Derived along ' + basePath;
-    const addRow = (label: string, value: string): void => {
-      derivedBundle.append(
-        el('dt', { text: label }),
-        el('dd', { class: 'mono', text: value }),
-      );
-    };
-    addRow('priv hex', bundle.privKeyHex);
-    addRow('WIF', bundle.wif);
-    addRow('pubkey (compressed)', bundle.pubKeyHex);
-    addRow('HASH160', bundle.hash160Hex);
-    addRow('P2PKH (1…)', bundle.p2pkh);
-    addRow('P2WPKH (bc1…)', bundle.p2wpkh);
+    derivedBundle.append(
+      copyRow('priv hex', bundle.privKeyHex),
+      copyRow('WIF', bundle.wif),
+      copyRow('pubkey (compressed)', bundle.pubKeyHex),
+      copyRow('HASH160', bundle.hash160Hex),
+      copyRow('P2PKH (1…)', bundle.p2pkh),
+      copyRow('P2WPKH (bc1…)', bundle.p2wpkh),
+    );
+    derivedQrRow.replaceChildren(qrPanel('P2PKH', bundle.p2pkh), qrPanel('P2WPKH', bundle.p2wpkh));
+    announce(`Derived address at ${basePath}. P2PKH ${bundle.p2pkh.slice(0, 6)} ellipsis.`);
   }
 
   genBtn.addEventListener('click', () => {
     try {
       const entropy = new Uint8Array(16);
       crypto.getRandomValues(entropy);
-      const mnemonic = entropyToMnemonic(entropy, WORDLIST);
-      renderMnemonic(mnemonic);
+      renderMnemonic(entropyToMnemonic(entropy, WORDLIST));
     } catch (err) {
       console.error('Generate mnemonic failed:', err);
     }
@@ -388,23 +740,26 @@ function renderSeedSection(): HTMLElement {
     if (!input) {
       validateStatus.className = 'scenario-status scenario-status--pending';
       validateStatus.textContent = 'awaiting input';
+      announce('Awaiting mnemonic input.');
       return;
     }
     const ok = validateMnemonic(input, WORDLIST);
     validateStatus.className =
       'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid');
     validateStatus.textContent = ok ? 'checksum valid' : 'invalid (bad word or checksum)';
+    announce(ok ? 'Mnemonic checksum is valid.' : 'Mnemonic is invalid — bad word or checksum.');
   });
 
   deriveBtn.addEventListener('click', derive);
   pathInput.addEventListener('change', derive);
   indexInput.addEventListener('change', derive);
+  indexInput.addEventListener('input', derive);
 
   return section;
 }
 
 // =====================================================================
-// Section 4 — Understand it
+// Understand it
 // =====================================================================
 function renderConcepts(): HTMLElement {
   const section = el('section', { class: 'lab-section', 'aria-labelledby': 'concepts-h2' });
@@ -422,45 +777,39 @@ function renderConcepts(): HTMLElement {
   const grid = el('div', { class: 'reuse-grid' });
   for (const c of CONCEPTS) {
     const card = el('div', { class: 'panel-card concept-card' });
-    card.append(
-      el('h3', { class: 'card-title', text: c.title }),
-      el('p', { text: c.body }),
-    );
+    card.append(el('h3', { class: 'card-title', text: c.title }), el('p', { text: c.body }));
     grid.append(card);
   }
   section.append(grid);
 
-  // Optional: small checksum-in-action demo using a real address.
   const checkCard = el('div', { class: 'panel-card checksum-card' });
   checkCard.append(
     el('h3', { class: 'card-title', text: 'Checksum in action' }),
     el('p', {
       text:
-        "Below is the address derived from private key = 1 (a textbook constant — do not fund it). Change the highlighted character and the next valid-address rederive will not match: that is what a wallet's 'invalid address' error is detecting.",
+        "Below is the address derived from private key = 1 (a textbook constant — do not fund it). The Base58Check tail on the P2PKH and the Bech32 polymod on the P2WPKH are exactly what a wallet's 'invalid address' error checks before letting you send.",
     }),
   );
-  const referenceBundle = deriveAddress((() => {
-    const k = new Uint8Array(32);
-    k[31] = 1;
-    return k;
-  })());
-  checkCard.append(
-    el('dl', { class: 'derived-bundle' }, [
-      el('dt', { text: 'Reference P2PKH (privkey = 1)' }),
-      el('dd', { class: 'mono', text: referenceBundle.p2pkh }),
-      el('dt', { text: 'Reference P2WPKH (privkey = 1)' }),
-      el('dd', { class: 'mono', text: referenceBundle.p2wpkh }),
-      el('dt', { text: 'Pubkey HASH160' }),
-      el('dd', { class: 'mono', text: referenceBundle.hash160Hex }),
-    ]),
+  const referenceBundle = deriveAddress(
+    (() => {
+      const k = new Uint8Array(32);
+      k[31] = 1;
+      return k;
+    })(),
   );
+  const refDl = el('dl', { class: 'derived-bundle' });
+  refDl.append(
+    copyRow('Reference P2PKH (privkey = 1)', referenceBundle.p2pkh),
+    copyRow('Reference P2WPKH (privkey = 1)', referenceBundle.p2wpkh),
+    copyRow('Pubkey HASH160', referenceBundle.hash160Hex),
+  );
+  checkCard.append(refDl);
   section.append(checkCard);
-
   return section;
 }
 
 // =====================================================================
-// Section 5 — Stay safe
+// Stay safe
 // =====================================================================
 function renderSafety(): HTMLElement {
   const section = el('section', { class: 'lab-section', 'aria-labelledby': 'safety-h2' });
@@ -474,14 +823,10 @@ function renderSafety(): HTMLElement {
         'Bitcoin gives you direct ownership; it also gives you direct responsibility. These are the rules every long-term holder learns, often by losing something the first time.',
     }),
   );
-
   const grid = el('div', { class: 'reuse-grid' });
   for (const c of SAFETY) {
     const card = el('div', { class: 'panel-card safety-card' });
-    card.append(
-      el('h3', { class: 'card-title', text: c.title }),
-      el('p', { text: c.body }),
-    );
+    card.append(el('h3', { class: 'card-title', text: c.title }), el('p', { text: c.body }));
     grid.append(card);
   }
   section.append(grid);
@@ -489,7 +834,7 @@ function renderSafety(): HTMLElement {
 }
 
 // =====================================================================
-// Footer — scripture (Part D)
+// Footer
 // =====================================================================
 function renderFooter(): HTMLElement {
   const footer = el('footer', {
@@ -511,15 +856,19 @@ export function mountApp(root: HTMLDivElement): void {
   root.replaceChildren();
   root.append(renderHero());
   const main = el('main', { id: 'main-content', role: 'main', tabindex: '-1' });
-  main.append(
-    renderKeyToAddress(),
-    renderSeedSection(),
-    renderConcepts(),
-    renderSafety(),
-  );
+  main.append(renderKeyToAddress(), renderSeedSection(), renderConcepts(), renderSafety());
   root.append(main);
+
+  // Shared announcer for all aria-live messages issued via announce().
+  announceTarget = el('div', {
+    class: 'visually-hidden',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+  });
+  root.append(announceTarget);
+
   root.append(renderFooter());
 }
 
-// Tiny re-exports so it's clear what the UI module relies on.
 export { hexToBytes };
