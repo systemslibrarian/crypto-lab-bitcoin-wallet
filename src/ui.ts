@@ -843,6 +843,16 @@ function renderFooter(): HTMLElement {
     'aria-label': 'Scripture',
   });
   footer.append(
+    el('p', {
+      class: 'footer-links',
+      html:
+        'Related demos: ' +
+        '<a href="https://systemslibrarian.github.io/crypto-lab-ecdsa-forge/" target="_blank" rel="noopener noreferrer">secp256k1 ECDSA signing and nonce-reuse failures, the curve that spends Bitcoin</a> · ' +
+        '<a href="https://systemslibrarian.github.io/crypto-lab-merkle-vault/" target="_blank" rel="noopener noreferrer">SHA-256 Merkle trees and inclusion proofs</a> · ' +
+        '<a href="https://systemslibrarian.github.io/crypto-lab-hash-zoo/" target="_blank" rel="noopener noreferrer">the hash families behind addresses and checksums</a> · ' +
+        '<a href="https://systemslibrarian.github.io/crypto-lab-babel-hash/" target="_blank" rel="noopener noreferrer">SHA-256, SHA3-256, and BLAKE3 with HMAC</a> · ' +
+        '<a href="https://systemslibrarian.github.io/crypto-lab-curve-lens/" target="_blank" rel="noopener noreferrer">elliptic-curve fundamentals (Curve25519, P-256, ECDH)</a>',
+    }),
     el('p', { text: SCRIPTURE_TEXT }),
     el('cite', { text: `— ${SCRIPTURE_CITATION}` }),
   );
