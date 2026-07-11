@@ -7,6 +7,7 @@
 
 :root,
 [data-theme='dark'] {
+  color-scheme: dark;
   --bg: #0d1024;
   --bg-soft: #161a36;
   --panel: #1b1f3a;
@@ -47,6 +48,7 @@
 }
 
 [data-theme='light'] {
+  color-scheme: light;
   --bg: #f6f6fb;
   --bg-soft: #ecedf6;
   --panel: #ffffff;
@@ -84,11 +86,17 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Give the root its own background so WebKit paints the canvas correctly
+     (it otherwise promotes body's background and reports it transparent,
+     tripping axe color-contrast against an assumed white page). */
+  background-color: var(--bg);
+}
 html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
   line-height: 1.55;
@@ -412,6 +420,24 @@ pre {
 .scripture-footer cite {
   font-style: normal;
   color: var(--ink);
+}
+/* Related-demos links. The default UA link colour fails AA on the page
+   background in both themes; use the theme's cyan accent, which clears
+   4.5:1 on --bg dark (#7ad1ff on #0d1024) and light (#0a5c87 on #f6f6fb). */
+.footer-links {
+  font-style: normal;
+  color: var(--ink-soft);
+}
+.footer-links a {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+.footer-links a:hover {
+  text-decoration: none;
+}
+.footer-links a:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
 }
 
 @media (max-width: 600px) {
