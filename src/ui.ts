@@ -154,7 +154,13 @@ interface SeedState {
 // Hero
 // =====================================================================
 function renderHero(): HTMLElement {
-  const hero = el('section', { class: 'hero-panel', role: 'banner' });
+  // Fleet-standard hero: title block on the left, "why it matters" on the right.
+  // Rendered as a <section> (not <header>) so it does not become a second
+  // implicit banner landmark alongside the shared .cl-topbar header.
+  const hero = el('section', { class: 'hero-panel' });
+
+  // The theme-toggle stays in the DOM (hidden by the shared header CSS) so the
+  // page's own theme JS keeps working; the shared bar's toggle drives it.
   hero.append(
     el('button', {
       id: 'theme-toggle',
@@ -163,13 +169,35 @@ function renderHero(): HTMLElement {
       'aria-label': 'Switch to light theme',
       text: '🌙',
     }),
-    el('p', { class: 'hero-eyebrow', text: 'Bitcoin · Wallet Mechanics' }),
-    el('h1', { text: 'What a Bitcoin address (and a seed phrase) actually is' }),
+  );
+
+  const heroStd = el('header', { class: 'cl-hero' });
+  const main = el('div', { class: 'cl-hero-main' });
+  main.append(
+    el('h1', { class: 'cl-hero-title', text: 'Bitcoin Wallet' }),
     el('p', {
-      class: 'hero-lede',
-      text:
-        'Most developers use a wallet without ever seeing the chain that turns 32 random bytes into a spendable address, or what the 12 words really encode. This page does that chain for real in your browser — secp256k1, HASH160, Base58Check, Bech32, BIP-39 and BIP-32 — built on the audited @noble libraries and validated against the official BIP test vectors. Every key here is generated locally; nothing is ever sent anywhere.',
+      class: 'cl-hero-sub',
+      text: 'secp256k1 · HASH160 · Base58Check · Bech32 · BIP-39 · BIP-32',
     }),
+    el('p', {
+      class: 'cl-hero-desc',
+      text:
+        'Runs the real derivation chain in your browser — 32 random bytes → secp256k1 public key → HASH160 → P2PKH & P2WPKH addresses, plus a BIP-39 mnemonic decoded to a BIP-32 master key and walked down a derivation path.',
+    }),
+  );
+  const why = el('aside', { class: 'cl-hero-why', 'aria-label': 'Why it matters' });
+  why.append(
+    el('span', { class: 'cl-hero-why-label', text: 'WHY IT MATTERS' }),
+    el('p', {
+      class: 'cl-hero-why-text',
+      text:
+        'Those 12 words and 32 bytes ARE the money — anyone who sees them can spend your Bitcoin, and there is no reset. Knowing how the chain is built is how you tell a safe wallet from a trap, and why hardware keys exist.',
+    }),
+  );
+  heroStd.append(main, why);
+  hero.append(heroStd);
+
+  hero.append(
     el('div', { class: 'hero-metric-row' }, [
       el('span', {
         class: 'hero-metric',
