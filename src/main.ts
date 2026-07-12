@@ -5,6 +5,10 @@ import {
   deriveAddress,
   mnemonicToSeed,
   bytesToHex,
+  hexToBytes,
+  derivePath,
+  serializeXprv,
+  serializeXpub,
 } from './engine';
 
 const THEME_KEY = 'crypto-lab-theme';
@@ -62,6 +66,23 @@ function selfTest(): void {
     console.log('BIP-39 seed prefix ===', seedHex.slice(0, 16), '— expect c55257c360c07c72');
     if (!seedHex.startsWith('c55257c360c07c72')) {
       console.error('SELF-TEST FAIL: BIP-39 PBKDF2 seed mismatch');
+    }
+
+    // BIP-32 Test Vector 1: seed 000102...0f, derive the mixed hardened/normal
+    // path m/0'/1/2'/2/1000000000 and compare the serialized xprv/xpub to the
+    // official extended keys. This exercises the full HD derivation chain, not
+    // just the master key.
+    const tvSeed = hexToBytes('000102030405060708090a0b0c0d0e0f');
+    const tvKey = derivePath(tvSeed, "m/0'/1/2'/2/1000000000");
+    const expXprv =
+      'xprvA41z7zogVVwxVSgdKUHDy1SKmdb533PjDz7J6N6mV6uS3ze1ai8FHa8kmHScGpWmj4WggLyQjgPie1rFSruoUihUZREPSL39UNdE3BBDu76';
+    const expXpub =
+      'xpub6H1LXWLaKsWFhvm6RVpEL9P4KfRZSW7abD2ttkWP3SSQvnyA8FSVqNTEcYFgJS2UaFcxupHiYkro49S8yGasTvXEYBVPamhGW6cFJodrTHy';
+    const gotXprv = serializeXprv(tvKey);
+    const gotXpub = serializeXpub(tvKey);
+    console.log("BIP-32 Vector 1  m/0'/1/2'/2/1000000000 xprv ===", gotXprv === expXprv ? 'match' : gotXprv);
+    if (gotXprv !== expXprv || gotXpub !== expXpub) {
+      console.error('SELF-TEST FAIL: BIP-32 Test Vector 1 derivation mismatch');
     }
   } catch (err) {
     console.error('Self-test threw:', err);

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "test:e2e": "node tests/browser-e2e.mjs",
     "test:a11y": "playwright test"
   },
@@ -21,7 +22,8 @@
     "axe-core": "^4.12.0",
     "puppeteer": "^25.1.0",
     "typescript": "^5.4.5",
-    "vite": "^5.2.10"
+    "vite": "^5.2.10",
+    "vitest": "^2.1.9"
   },
   "allowScripts": {
     "puppeteer@25.1.0": true

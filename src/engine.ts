@@ -216,13 +216,55 @@ export interface HDKey {
     publicKey: Uint8Array;
     depth: number;
     index: number;
+    /** HASH160(parent pubkey)[0:4]; 0 for the master key. */
+    parentFingerprint?: number;
 }
 
 export function masterKeyFromSeed(seed: Uint8Array): HDKey {
     const I = hmac(sha512Hash, new TextEncoder().encode('Bitcoin seed'), seed);
     const IL = I.slice(0, 32);
     const IR = I.slice(32);
-    return { privateKey: IL, chainCode: IR, publicKey: secp.getPublicKey(IL, true), depth: 0, index: 0 };
+    return { privateKey: IL, chainCode: IR, publicKey: secp.getPublicKey(IL, true), depth: 0, index: 0, parentFingerprint: 0 };
+}
+
+// ---- BIP-32 extended key serialization (xprv / xpub, mainnet) ----
+// These let the derivation be checked byte-for-byte against the official
+// BIP-32 test vectors, which are stated as Base58Check-encoded extended keys.
+const XPRV_VERSION = 0x0488ade4;
+const XPUB_VERSION = 0x0488b21e;
+
+function ser32u(i: number): Uint8Array {
+    return ser32(i >>> 0);
+}
+
+/** HASH160(pubkey)[0:4] — the parent fingerprint used in extended keys. */
+export function keyFingerprint(publicKey: Uint8Array): number {
+    const h = hash160(publicKey);
+    return ((h[0] << 24) | (h[1] << 16) | (h[2] << 8) | h[3]) >>> 0;
+}
+
+export function serializeXprv(key: HDKey): string {
+    const payload = concat(
+        ser32u(XPRV_VERSION),
+        new Uint8Array([key.depth & 0xff]),
+        ser32u(key.parentFingerprint ?? 0),
+        ser32u(key.index),
+        key.chainCode,
+        concat(new Uint8Array([0]), key.privateKey),
+    );
+    return base58check(payload);
+}
+
+export function serializeXpub(key: HDKey): string {
+    const payload = concat(
+        ser32u(XPUB_VERSION),
+        new Uint8Array([key.depth & 0xff]),
+        ser32u(key.parentFingerprint ?? 0),
+        ser32u(key.index),
+        key.chainCode,
+        key.publicKey,
+    );
+    return base58check(payload);
 }
 
 const HARDENED = 0x80000000;
@@ -236,33 +278,45 @@ function ser32(i: number): Uint8Array {
     return b;
 }
 
-function modAdd(a: Uint8Array, b: Uint8Array): Uint8Array {
-    let x = BigInt('0x' + bytesToHex(a));
-    const y = BigInt('0x' + bytesToHex(b));
-    x = (x + y) % N;
-    let h = x.toString(16).padStart(64, '0');
-    return hexToBytes(h);
+function beToBig(a: Uint8Array): bigint {
+    return BigInt('0x' + bytesToHex(a));
+}
+function bigToBe32(x: bigint): Uint8Array {
+    return hexToBytes(x.toString(16).padStart(64, '0'));
 }
 
 export function deriveChild(parent: HDKey, index: number): HDKey {
     const hardened = index >= HARDENED;
-    let data: Uint8Array;
-    if (hardened) {
-        data = concat(new Uint8Array([0]), parent.privateKey, ser32(index));
-    } else {
-        data = concat(parent.publicKey, ser32(index));
+    // BIP-32 CKDpriv: on a rare invalid case (parse256(IL) >= n, or the resulting
+    // child private key == 0) the spec says the index is invalid and derivation
+    // must proceed with the *next* index. We loop rather than recurse so the
+    // final `index` we report is the one actually used.
+    for (let i = index; ; i++) {
+        let data: Uint8Array;
+        if (hardened) {
+            data = concat(new Uint8Array([0]), parent.privateKey, ser32(i));
+        } else {
+            data = concat(parent.publicKey, ser32(i));
+        }
+        const I = hmac(sha512Hash, parent.chainCode, data);
+        const IL = I.slice(0, 32);
+        const IR = I.slice(32);
+        const ilNum = beToBig(IL);
+        // Invalid if parse256(IL) >= n → try the next index.
+        if (ilNum >= N) continue;
+        const childNum = (ilNum + beToBig(parent.privateKey)) % N;
+        // Invalid if the child private key is 0 → try the next index.
+        if (childNum === 0n) continue;
+        const childPriv = bigToBe32(childNum);
+        return {
+            privateKey: childPriv,
+            chainCode: IR,
+            publicKey: secp.getPublicKey(childPriv, true),
+            depth: parent.depth + 1,
+            index: i,
+            parentFingerprint: keyFingerprint(parent.publicKey),
+        };
     }
-    const I = hmac(sha512Hash, parent.chainCode, data);
-    const IL = I.slice(0, 32);
-    const IR = I.slice(32);
-    const childPriv = modAdd(IL, parent.privateKey);
-    return {
-        privateKey: childPriv,
-        chainCode: IR,
-        publicKey: secp.getPublicKey(childPriv, true),
-        depth: parent.depth + 1,
-        index,
-    };
 }
 
 // derive along a path like "m/44'/0'/0'/0/0"
