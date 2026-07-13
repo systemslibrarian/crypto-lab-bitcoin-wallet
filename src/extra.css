@@ -621,6 +621,366 @@
   }
 }
 
+/* ================================================================
+   Byte-flow diagram (Key → Address animation)
+   ================================================================ */
+.byteflow-card {
+  margin-bottom: 16px;
+}
+.byteflow-help {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.byteflow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bf-spine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+.bf-stage {
+  flex: 1 1 150px;
+  min-width: 140px;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  /* Un-lit stages keep full text contrast (AA in both themes); the "lit" cue
+     is border + inset ring only, never opacity, so axe contrast always passes. */
+  transition: border-left-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+.bf-stage--lit {
+  border-left-color: var(--accent-2);
+  box-shadow: 0 0 0 2px var(--accent-2) inset;
+  background: var(--metric-bg);
+}
+.bf-kicker {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.bf-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-strong);
+}
+.bf-sub {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.bf-bytes {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--ink);
+  word-break: break-all;
+  min-height: 1.2em;
+}
+.bf-arrow {
+  align-self: center;
+  color: var(--ink-faint);
+  font-size: 20px;
+  font-family: var(--mono);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+.bf-arrow--flow {
+  color: var(--accent-2);
+  transform: scale(1.25);
+}
+.bf-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bf-branch {
+  flex: 1 1 240px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.bf-arrow--split {
+  align-self: center;
+  transform: none;
+}
+.bf-arrow--split.bf-arrow--flow {
+  transform: scale(1.25);
+}
+.bf-splitnote {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-style: italic;
+  padding: 6px 10px;
+  background: var(--metric-bg);
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 640px) {
+  .bf-spine,
+  .bf-split {
+    flex-direction: column;
+  }
+  .bf-arrow {
+    transform: rotate(90deg);
+    align-self: flex-start;
+    margin-left: 10px;
+  }
+  .bf-arrow--flow {
+    transform: rotate(90deg) scale(1.25);
+  }
+}
+
+/* ================================================================
+   BIP-39 encoder strip (bits → words + checksum)
+   ================================================================ */
+.bip39strip-card {
+  margin-bottom: 16px;
+}
+.bip39strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.bip39-mangle-btn {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+.bip39strip {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bip39strip-help {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.bip39-bits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bip39-band {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+}
+.bip39-bit {
+  width: 20px;
+  height: 26px;
+  padding: 0;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+button.bip39-bit {
+  /* override the global button gradient/accent styles for these tiny cells */
+  background: var(--panel);
+  color: var(--ink-soft);
+}
+button.bip39-bit:hover {
+  filter: none;
+  border-color: var(--accent-2);
+}
+.bip39-bit--one {
+  background: var(--metric-bg);
+  color: var(--ink-strong);
+  border-color: var(--accent-2);
+}
+button.bip39-bit--one {
+  background: var(--metric-bg);
+  color: var(--ink-strong);
+}
+.bip39-bit--cs {
+  background: var(--pending-bg);
+  color: var(--pending-ink);
+  border-color: var(--pending-ink);
+  cursor: default;
+}
+.bip39-bit--cs.bip39-bit--one {
+  background: var(--pending-bg);
+  color: var(--pending-ink);
+}
+.bip39-bit:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.bip39-bit--pulse {
+  animation: bip39pulse 0.7s ease;
+}
+@keyframes bip39pulse {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  40% {
+    box-shadow: 0 0 0 2px var(--accent-3);
+  }
+}
+.bip39-words {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.bip39-word {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+}
+.bip39-word--cs {
+  border-left-color: var(--pending-ink);
+}
+.bip39-word--pulse {
+  animation: bip39pulse 0.7s ease;
+}
+.bip39-word-num {
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+.bip39-word-idx {
+  font-size: 10.5px;
+  color: var(--accent-2);
+}
+.bip39-word-text {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-strong);
+  word-break: break-all;
+}
+.bip39-checkline {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.bip39-checknote {
+  color: var(--ink);
+}
+
+/* ================================================================
+   Inline glossary (dfn tooltips)
+   ================================================================ */
+.gloss {
+  font-style: normal;
+  border-bottom: 1px dotted var(--accent-2);
+  cursor: help;
+  color: inherit;
+}
+.gloss:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.jargon-card {
+  margin-bottom: 16px;
+}
+.jargon-help {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.jargon-row {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 2;
+}
+
+/* ================================================================
+   Known-answer-vectors panel
+   ================================================================ */
+.kat-card {
+  margin-bottom: 16px;
+}
+.kat-help {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.kat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.kat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.kat-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink-strong);
+}
+.kat-source {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.kat-values {
+  font-size: 11.5px;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+/* ================================================================
+   Derive-flow unify note
+   ================================================================ */
+.derive-unify {
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--metric-bg);
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+}
+.derive-unify strong {
+  color: var(--ink-strong);
+}
+
 /* ---------- Print stylesheet (Item 10) ---------- */
 @media print {
   :root,

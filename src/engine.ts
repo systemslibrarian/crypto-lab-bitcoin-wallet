@@ -34,6 +34,12 @@ function concat(...a: Uint8Array[]): Uint8Array {
 export function hash160(b: Uint8Array): Uint8Array {
     return ripemd160(sha256(b));
 }
+/** The intermediate SHA-256 digest inside HASH160 = RIPEMD-160(SHA-256(x)).
+ *  Exposed so the UI can show BOTH stages of the double hash, not just the
+ *  20-byte result. */
+export function sha256Once(b: Uint8Array): Uint8Array {
+    return sha256(b);
+}
 function dsha256(b: Uint8Array): Uint8Array {
     return sha256(sha256(b));
 }

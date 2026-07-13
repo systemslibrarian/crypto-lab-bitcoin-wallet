@@ -7,7 +7,7 @@ A working model of **Bitcoin wallet mechanics** — the chain that turns 32 rand
 ## When to Use It
 
 - **Understanding what a Bitcoin address actually is** — show the secp256k1 → HASH160 → Base58Check / Bech32 chain step by step, instead of treating an address as opaque.
-- **Teaching seed phrases honestly** — make BIP-39 visible: 16 random bytes become 12 words *because* the last word carries a SHA-256 checksum, and PBKDF2 stretches the phrase into the seed every wallet derives from.
+- **Teaching seed phrases honestly** — make BIP-39 visible: the bit-strip slices 132 bits into twelve 11-bit bands and lights up the word each band indexes, so 16 random bytes become 12 words *because* the last word carries a SHA-256 checksum, and PBKDF2 stretches the phrase into the seed every wallet derives from.
 - **Demonstrating HD wallets and derivation paths** — change the index of `m/44'/0'/0'/0/0` and watch one seed produce successive receive addresses; that is exactly how every modern wallet generates its address book.
 - **Showing the address checksum doing its job** — paste a phrase, mangle a word, and watch the BIP-39 checksum reject it; the typo-protection check is the same idea as the four-byte Base58Check tail on `1...` addresses.
 - **Do NOT use this for real funds.** A browser tab is not a secure place to generate or hold money. Use a hardware wallet (Ledger, Trezor, Coldcard) or audited wallet software for anything you cannot afford to lose. Never paste a phrase that controls real Bitcoin into any web page — including this one.
@@ -17,6 +17,15 @@ A working model of **Bitcoin wallet mechanics** — the chain that turns 32 rand
 **[systemslibrarian.github.io/crypto-lab-bitcoin-wallet](https://systemslibrarian.github.io/crypto-lab-bitcoin-wallet/)**
 
 The page has two interactive flows. **Generate key** makes a fresh secp256k1 private key, then walks the five-stage pipeline — private key (hex + WIF), compressed public key, HASH160, P2PKH `1...`, and P2WPKH `bc1...` — every transform shown with its real bytes. **Generate mnemonic** produces 16 bytes of entropy via `crypto.getRandomValues`, encodes them as a 12-word BIP-39 phrase, stretches the phrase with PBKDF2-HMAC-SHA512 into a 64-byte seed, and derives the BIP-32 master key. A **validate-mnemonic** input runs the checksum check on any pasted phrase (pass / fail badge — do not paste a real wallet phrase). A **path** field (default `m/44'/0'/0'/0/0`) plus a **receive index** spinner walk the BIP-32 derivation to a real address; bumping the index produces the next address from the same seed, which is what a wallet does every time you click "new address". The page is dark by default with a top-right `🌙/☀️` toggle that persists across visits.
+
+The exhibits are:
+
+1. **Watch the bytes flow** — an animated byte-flow diagram that, on Generate, carries the real public-key bytes into a SHA-256 box, then into a RIPEMD-160 box producing the 20-byte HASH160, then splits that one fingerprint into two encoders — Base58Check (`1...`) and Bech32 (`bc1...`) — so you *see* both address types commit to the same fingerprint rather than reading it asserted.
+2. **Key → Address pipeline** — the five real transforms (private key + WIF, compressed public key, HASH160, P2PKH, P2WPKH) each shown with its own bytes and a copy button, plus scannable QR codes for both addresses.
+3. **Bits → words: the BIP-39 encoder** — the 128 entropy bits + 4 checksum bits rendered as 132 colored bit-cells grouped into twelve 11-bit bands, each band's integer value indexing a word. Click any entropy bit to flip it and watch the affected word *and* the checksum band change; a one-click **Mangle the last word** button breaks the checksum on purpose and flips the badge to invalid.
+4. **BIP-44 path breakdown** — `m/44'/0'/0'/0/0` rendered as labeled nodes (Purpose / Coin / Account / Change / Index), each captioned with what the number means and why it is hardened.
+5. **Seed → HD wallet** — mnemonic → PBKDF2 seed → BIP-32 master key, a **Walk a derivation path** control (with a note that the leaf is an ordinary private key fed into the same Key → Address pipeline), a **Test yourself** memorize drill, and the first five receive addresses from one seed.
+6. **Verified against the official spec** — a panel that recomputes the published BIP-32/BIP-39 constants (privkey = 1 P2PKH, the TREZOR seed prefix, BIP-32 Test Vector 1 `xprv`) live in the browser and shows a green match badge, plus an inline glossary for spike terms (SegWit, witness version, Base58Check, Bech32, polymod, WIF).
 
 ## What Can Go Wrong
 

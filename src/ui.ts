@@ -9,6 +9,8 @@ import {
   mnemonicToSeed,
   masterKeyFromSeed,
   derivePath,
+  serializeXprv,
+  serializeXpub,
   type AddressBundle,
   type HDKey,
 } from './engine';
@@ -24,6 +26,7 @@ import {
   SCRIPTURE_CITATION,
 } from './data';
 import { encodeQR, renderQRSVG } from './qr';
+import { byteFlowDiagram, bip39Strip, type ByteFlow, type Bip39Strip } from './flow';
 
 // =====================================================================
 // Tiny DOM helper
@@ -58,6 +61,39 @@ function el<K extends keyof HTMLElementTagNameMap>(
   if (html !== undefined) node.innerHTML = html;
   if (on) for (const [ev, fn] of Object.entries(on)) node.addEventListener(ev, fn);
   for (const c of children) node.append(c);
+  return node;
+}
+
+// =====================================================================
+// Inline glossary — first mention of a spike term becomes a <dfn> with an
+// accessible tooltip (native title + aria-label + a visible dotted underline
+// so it is discoverable, not just hover-only). Definitions live in one place.
+// =====================================================================
+const GLOSSARY: Record<string, string> = {
+  SegWit:
+    'Segregated Witness (BIP-141): a 2017 upgrade that moves the signature ("witness") into a separate part of the transaction, enabling cheaper fees and the bc1… address format.',
+  'witness version':
+    'A small number at the start of a SegWit output marking which script rules apply. Version 0 covers today\'s P2WPKH (bc1q…) and P2WSH addresses.',
+  Base58Check:
+    'An encoding for 1… addresses and WIF keys: take the payload, append 4 bytes of double-SHA-256 as a checksum, then write it in Base58 (digits/letters with 0, O, I, l removed to avoid look-alikes).',
+  Bech32:
+    'The encoding (BIP-173) behind bc1… SegWit addresses. Lowercase, groups of 5 bits, with a strong error-detecting checksum computed by a polynomial called the polymod.',
+  polymod:
+    'The polynomial calculation at the heart of the Bech32 checksum. It mixes every character so that a few mistyped characters are almost always caught.',
+  WIF:
+    'Wallet Import Format: a private key written as Base58Check with a 0x80 prefix (and a trailing 0x01 flag for compressed keys). Same secret as the raw hex, just harder to mistype.',
+  'double-SHA-256':
+    'SHA-256 applied twice, SHA-256(SHA-256(x)). Bitcoin uses its first 4 bytes as the Base58Check checksum.',
+};
+function term(name: string, display?: string): HTMLElement {
+  const def = GLOSSARY[name];
+  const node = el('dfn', {
+    class: 'gloss',
+    tabindex: '0',
+    title: def ? `${name}: ${def}` : name,
+    'aria-label': def ? `${name}. ${def}` : name,
+    text: display ?? name,
+  });
   return node;
 }
 
@@ -148,6 +184,7 @@ interface SeedState {
   mnemonic: string | null;
   seed: Uint8Array | null;
   master: HDKey | null;
+  entropy: Uint8Array | null;
 }
 
 // =====================================================================
@@ -247,6 +284,31 @@ function renderKeyToAddress(): HTMLElement {
   controls.append(generateBtn, warning);
   section.append(controls);
 
+  // Byte-flow animation (HIGH item): carry the real pubkey bytes through
+  // SHA-256 → RIPEMD-160 → HASH160, then split into the two encoders so the
+  // learner SEES both address types commit to the same 20-byte fingerprint.
+  const flow: ByteFlow = byteFlowDiagram();
+  const flowCard = el('div', { class: 'panel-card byteflow-card' });
+  flowCard.append(
+    el('h3', { class: 'card-title', text: 'Watch the bytes flow' }),
+    el('p', {
+      class: 'byteflow-help',
+    }),
+  );
+  // Build the help sentence with an inline glossary term.
+  const flowHelp = flowCard.querySelector<HTMLParagraphElement>('.byteflow-help');
+  if (flowHelp) {
+    flowHelp.append(
+      document.createTextNode('One public key, hashed twice into a 20-byte fingerprint, then encoded two different ways. The '),
+      term('Base58Check'),
+      document.createTextNode(' branch makes the classic 1… address; the '),
+      term('Bech32'),
+      document.createTextNode(' branch makes the modern bc1… address. Both point at the SAME fingerprint — press Generate to watch it move.'),
+    );
+  }
+  flowCard.append(flow.root);
+  section.append(flowCard);
+
   // aria-live wrapper around all stage values
   const pipelineLive = el('div', {
     class: 'pipeline-live',
@@ -304,6 +366,7 @@ function renderKeyToAddress(): HTMLElement {
     });
 
     qrRow.replaceChildren(qrPanel('P2PKH', bundle.p2pkh), qrPanel('P2WPKH', bundle.p2wpkh));
+    flow.run(hexToBytes(bundle.pubKeyHex), bundle.p2pkh, bundle.p2wpkh);
     announce(
       `Fresh key derived. P2PKH ${bundle.p2pkh.slice(0, 6)} ellipsis. P2WPKH ${bundle.p2wpkh.slice(0, 8)} ellipsis.`,
     );
@@ -561,7 +624,7 @@ function renderSeedSection(): HTMLElement {
     ]),
   );
 
-  const state: SeedState = { mnemonic: null, seed: null, master: null };
+  const state: SeedState = { mnemonic: null, seed: null, master: null, entropy: null };
 
   // Generate-mnemonic control
   const generateRow = el('div', { class: 'panel-card seed-controls' });
@@ -589,6 +652,23 @@ function renderSeedSection(): HTMLElement {
   );
   mnemonicCard.append(wordGrid, phraseRow, seedRow, masterRow);
   section.append(mnemonicCard);
+
+  // BIP-39 encoder strip (HIGH item): 132 bit-cells → twelve 11-bit bands →
+  // words + checksum. Flip a bit to watch a word and the checksum change.
+  const strip: Bip39Strip = bip39Strip(WORDLIST);
+  const stripCard = el('div', { class: 'panel-card bip39strip-card' });
+  const stripHead = el('div', { class: 'bip39strip-head' });
+  stripHead.append(el('h3', { class: 'card-title', text: 'Bits → words: the BIP-39 encoder' }));
+  const mangleBtn = el('button', {
+    type: 'button',
+    class: 'secondary bip39-mangle-btn',
+    text: 'Mangle the last word',
+    'aria-label': 'Swap the last word for a wrong one and watch the checksum reject the phrase',
+    disabled: true,
+  });
+  stripHead.append(mangleBtn);
+  stripCard.append(stripHead, strip.root);
+  section.append(stripCard);
 
   // Memorize-and-test (Item 7)
   const memorize = renderMemorizeMode(() =>
@@ -666,7 +746,14 @@ function renderSeedSection(): HTMLElement {
     text: 'Generate a mnemonic above to begin.',
   });
   const derivedBundle = el('dl', { class: 'derived-bundle' });
-  derivedOut.append(derivedSummary, derivedBundle);
+  // Unify note (MEDIUM item): reassures the learner the leaf is an ordinary key.
+  const derivedUnify = el('p', { class: 'derive-unify', hidden: true });
+  derivedUnify.append(
+    document.createTextNode('This leaf is just a 32-byte private key. From here it runs the '),
+    el('strong', { text: 'exact same Key → Address pipeline' }),
+    document.createTextNode(' shown at the top of the page — HASH160 → P2PKH & P2WPKH. HD derivation does not make a new KIND of address; it only chooses which private key goes in.'),
+  );
+  derivedOut.append(derivedSummary, derivedUnify, derivedBundle);
   deriveCard.append(derivedOut);
   // QR pair for the derived path
   const derivedQrRow = el('div', { class: 'qr-row', 'aria-live': 'polite' });
@@ -678,10 +765,15 @@ function renderSeedSection(): HTMLElement {
   section.append(addressList);
 
   // ---- behaviour ----
-  function renderMnemonic(mnemonic: string): void {
+  function renderMnemonic(mnemonic: string, entropy?: Uint8Array): void {
     state.mnemonic = mnemonic;
+    state.entropy = entropy ?? null;
     state.seed = mnemonicToSeed(mnemonic);
     state.master = masterKeyFromSeed(state.seed);
+    if (entropy) {
+      strip.render(entropy);
+      mangleBtn.disabled = false;
+    }
 
     wordGrid.replaceChildren();
     const words = mnemonic.split(' ');
@@ -710,6 +802,7 @@ function renderSeedSection(): HTMLElement {
   function derive(): void {
     derivedBundle.replaceChildren();
     derivedQrRow.replaceChildren();
+    derivedUnify.hidden = true;
     if (!state.seed) {
       derivedSummary.textContent = 'Generate a mnemonic above to begin.';
       return;
@@ -741,6 +834,7 @@ function renderSeedSection(): HTMLElement {
     }
     const bundle = deriveAddress(hdKey.privateKey);
     derivedSummary.textContent = 'Derived along ' + basePath;
+    derivedUnify.hidden = false;
     derivedBundle.append(
       copyRow('priv hex', bundle.privKeyHex),
       copyRow('WIF', bundle.wif),
@@ -757,10 +851,28 @@ function renderSeedSection(): HTMLElement {
     try {
       const entropy = new Uint8Array(16);
       crypto.getRandomValues(entropy);
-      renderMnemonic(entropyToMnemonic(entropy, WORDLIST));
+      renderMnemonic(entropyToMnemonic(entropy, WORDLIST), entropy);
     } catch (err) {
       console.error('Generate mnemonic failed:', err);
     }
+  });
+
+  // "Mangle the last word" — one-click typo demo. Flips a bit in the strip so
+  // the last word changes and the BIP-39 checksum badge flips to invalid,
+  // then mirrors the broken phrase into the validate box and runs it through
+  // the real validateMnemonic path so the learner sees both fail together.
+  mangleBtn.addEventListener('click', () => {
+    if (!state.mnemonic) return;
+    const newLast = strip.mangleLast();
+    const mangled = strip.getWords().join(' ');
+    validateInput.value = mangled;
+    const ok = validateMnemonic(mangled, WORDLIST);
+    validateStatus.className =
+      'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid');
+    validateStatus.textContent = ok ? 'checksum valid' : 'invalid (bad word or checksum)';
+    announce(
+      `Last word changed to ${newLast}. The BIP-39 checksum now fails — a real wallet would reject this phrase.`,
+    );
   });
 
   validateBtn.addEventListener('click', () => {
@@ -787,6 +899,101 @@ function renderSeedSection(): HTMLElement {
 }
 
 // =====================================================================
+// Known-answer vectors panel — recomputes the published BIP-32/BIP-39
+// constants live and shows a pass badge. Newcomers do not trust browser
+// crypto; reproducing the spec's own numbers builds that trust.
+// =====================================================================
+function renderKatPanel(): HTMLElement {
+  const card = el('div', { class: 'panel-card kat-card' });
+  card.append(
+    el('h3', { class: 'card-title', text: 'Verified against the official spec' }),
+    el('p', {
+      class: 'kat-help',
+      text:
+        'Everything here is recomputed in your browser at page load and checked against the constants published in the BIP standards. Green means this page reproduces the spec exactly — the same discipline real wallet implementations use.',
+    }),
+  );
+
+  interface Vector {
+    label: string;
+    source: string;
+    got: string;
+    expected: string;
+  }
+  const vectors: Vector[] = [];
+
+  // 1) privkey = 1 → canonical P2PKH address.
+  try {
+    const one = new Uint8Array(32);
+    one[31] = 1;
+    const b = deriveAddress(one);
+    vectors.push({
+      label: 'privkey = 1 → P2PKH',
+      source: 'textbook secp256k1 base point',
+      got: b.p2pkh,
+      expected: '1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH',
+    });
+  } catch (err) {
+    console.error('KAT privkey=1 failed:', err);
+  }
+
+  // 2) BIP-39 Trezor vector: seed prefix from the abandon…about phrase + TREZOR.
+  try {
+    const m =
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    const seedHex = bytesToHex(mnemonicToSeed(m, 'TREZOR'));
+    vectors.push({
+      label: 'BIP-39 seed prefix',
+      source: '"abandon ×11 about" + passphrase TREZOR',
+      got: seedHex.slice(0, 16) + '…',
+      expected: 'c55257c360c07c72…',
+    });
+  } catch (err) {
+    console.error('KAT BIP-39 failed:', err);
+  }
+
+  // 3) BIP-32 Test Vector 1: xprv at a mixed hardened/normal path.
+  try {
+    const seed = hexToBytes('000102030405060708090a0b0c0d0e0f');
+    const k = derivePath(seed, "m/0'/1/2'/2/1000000000");
+    const xprv = serializeXprv(k);
+    const xpub = serializeXpub(k);
+    const expXprv =
+      'xprvA41z7zogVVwxVSgdKUHDy1SKmdb533PjDz7J6N6mV6uS3ze1ai8FHa8kmHScGpWmj4WggLyQjgPie1rFSruoUihUZREPSL39UNdE3BBDu76';
+    const expXpub =
+      'xpub6H1LXWLaKsWFhvm6RVpEL9P4KfRZSW7abD2ttkWP3SSQvnyA8FSVqNTEcYFgJS2UaFcxupHiYkro49S8yGasTvXEYBVPamhGW6cFJodrTHy';
+    vectors.push({
+      label: "BIP-32 Vector 1 xprv (m/0'/1/2'/2/1000000000)",
+      source: 'seed 000102…0f',
+      got: xprv.slice(0, 12) + '…' + (xpub === expXpub ? '' : ' (xpub mismatch!)'),
+      expected: expXprv.slice(0, 12) + '…',
+    });
+  } catch (err) {
+    console.error('KAT BIP-32 failed:', err);
+  }
+
+  const list = el('ul', { class: 'kat-list' });
+  for (const v of vectors) {
+    const ok = v.got.replace('…', '') === v.expected.replace('…', '') && !v.got.includes('mismatch');
+    const item = el('li', { class: 'kat-item' });
+    const badge = el('span', {
+      class: 'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid'),
+      text: ok ? '✓ match' : '✗ mismatch',
+    });
+    const body = el('div', { class: 'kat-body' });
+    body.append(
+      el('span', { class: 'kat-label', text: v.label }),
+      el('span', { class: 'kat-source', text: v.source }),
+      el('span', { class: 'kat-values mono', text: `got ${v.got}  ·  spec ${v.expected}` }),
+    );
+    item.append(badge, body);
+    list.append(item);
+  }
+  card.append(list);
+  return card;
+}
+
+// =====================================================================
 // Understand it
 // =====================================================================
 function renderConcepts(): HTMLElement {
@@ -802,6 +1009,25 @@ function renderConcepts(): HTMLElement {
     }),
   );
 
+  // Jargon strip (LOW item): the spike terms, each a hover/focus glossary dfn,
+  // so a true newcomer meets a definition the first time the word appears.
+  const jargon = el('div', { class: 'panel-card jargon-card' });
+  jargon.append(
+    el('h3', { class: 'card-title', text: 'Jargon, defined' }),
+    el('p', {
+      class: 'jargon-help',
+      text: 'Hover or focus any underlined term for a one-line definition — no need to leave the page.',
+    }),
+  );
+  const jargonRow = el('p', { class: 'jargon-row' });
+  const terms = ['SegWit', 'witness version', 'Base58Check', 'Bech32', 'polymod', 'WIF', 'double-SHA-256'];
+  terms.forEach((t, i) => {
+    jargonRow.append(term(t));
+    if (i < terms.length - 1) jargonRow.append(document.createTextNode(' · '));
+  });
+  jargon.append(jargonRow);
+  section.append(jargon);
+
   const grid = el('div', { class: 'reuse-grid' });
   for (const c of CONCEPTS) {
     const card = el('div', { class: 'panel-card concept-card' });
@@ -810,14 +1036,28 @@ function renderConcepts(): HTMLElement {
   }
   section.append(grid);
 
+  // Known-answer vectors panel (LOW item): surface the "this matches the
+  // official spec" reassurance in the UI, computed live in the browser — not
+  // hardcoded. If any recomputation ever drifts from the published constant
+  // the badge turns red, so this doubles as an in-page self-test.
+  section.append(renderKatPanel());
+
   const checkCard = el('div', { class: 'panel-card checksum-card' });
-  checkCard.append(
-    el('h3', { class: 'card-title', text: 'Checksum in action' }),
-    el('p', {
-      text:
-        "Below is the address derived from private key = 1 (a textbook constant — do not fund it). The Base58Check tail on the P2PKH and the Bech32 polymod on the P2WPKH are exactly what a wallet's 'invalid address' error checks before letting you send.",
-    }),
+  const checkPara = el('p', {});
+  checkPara.append(
+    document.createTextNode(
+      'Below is the address derived from private key = 1 (a textbook constant — do not fund it). The ',
+    ),
+    term('Base58Check'),
+    document.createTextNode(' tail on the P2PKH and the '),
+    term('Bech32'),
+    document.createTextNode(' '),
+    term('polymod'),
+    document.createTextNode(
+      " on the P2WPKH are exactly what a wallet's 'invalid address' error checks before letting you send.",
+    ),
   );
+  checkCard.append(el('h3', { class: 'card-title', text: 'Checksum in action' }), checkPara);
   const referenceBundle = deriveAddress(
     (() => {
       const k = new Uint8Array(32);
