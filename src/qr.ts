@@ -199,19 +199,23 @@ function placeData(q: QR, dataBytes: number[]): void {
   for (const b of dataBytes) for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
   let bitIdx = 0;
   let upward = true;
-  for (let col = s - 1; col >= 1; col -= 2) {
-    const c0 = col === 6 ? col - 1 : col; // skip timing column 6
-    for (let i = 0; i < s; i++) {
-      const r = upward ? s - 1 - i : i;
+  // Column pairs walk right-to-left: (s-1, s-2), (s-3, s-4), … then the pair
+  // that would include the vertical timing column 6 is shifted left to (5, 4),
+  // and the walk continues (3, 2), (1, 0). Getting this stepping wrong silently
+  // produces a well-formed but undecodable symbol, so it is covered by a
+  // round-trip test against an independent decoder in tests/qr.test.ts.
+  for (let right = s - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5; // skip the vertical timing column
+    for (let vert = 0; vert < s; vert++) {
+      const r = upward ? s - 1 - vert : vert;
       for (let dc = 0; dc < 2; dc++) {
-        const cc = c0 - dc;
+        const cc = right - dc;
         if (q.fn[r][cc]) continue;
         const bit = bitIdx < bits.length ? bits[bitIdx++] : 0;
         q.dark[r][cc] = bit === 1;
       }
     }
     upward = !upward;
-    if (col === 7) col--; // jump past column 6 next time
   }
 }
 
@@ -343,9 +347,11 @@ function placeFormatInfo(q: QR, bits: number): void {
   setBit(8, 8, (bits >> 7) & 1);
   setBit(8, 7, (bits >> 8) & 1);
   for (let i = 9; i <= 14; i++) setBit(8, 14 - i, (bits >> i) & 1);
-  // bottom-left strip + top-right strip
-  for (let i = 0; i < 7; i++) setBit(s - 1 - i, 8, (bits >> i) & 1);
-  for (let i = 0; i < 8; i++) setBit(8, s - 1 - i, (bits >> (i + 7)) & 1);
+  // Second copy: bits 0..7 run right-to-left along row 8 under the top-right
+  // finder (columns s-1 down to s-8); bits 8..14 run top-to-bottom down
+  // column 8 beside the bottom-left finder (rows s-7 through s-1).
+  for (let i = 0; i < 8; i++) setBit(8, s - 1 - i, (bits >> i) & 1);
+  for (let i = 8; i < 15; i++) setBit(s - 15 + i, 8, (bits >> i) & 1);
   // dark module
   q.dark[s - 8][8] = true;
 }

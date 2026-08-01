@@ -291,7 +291,14 @@ function bigToBe32(x: bigint): Uint8Array {
     return hexToBytes(x.toString(16).padStart(64, '0'));
 }
 
-export function deriveChild(parent: HDKey, index: number): HDKey {
+/** The HMAC-SHA512 used by CKDpriv. Injectable ONLY so the test suite can force
+ *  the two invalid-index branches below, which are unreachable with the real
+ *  HMAC (they occur with probability ~2^-127 per derivation). Production callers
+ *  never pass this argument. */
+export type CkdHmac = (chainCode: Uint8Array, data: Uint8Array) => Uint8Array;
+const realCkdHmac: CkdHmac = (chainCode, data) => hmac(sha512Hash, chainCode, data);
+
+export function deriveChild(parent: HDKey, index: number, hmac512: CkdHmac = realCkdHmac): HDKey {
     const hardened = index >= HARDENED;
     // BIP-32 CKDpriv: on a rare invalid case (parse256(IL) >= n, or the resulting
     // child private key == 0) the spec says the index is invalid and derivation
@@ -304,7 +311,7 @@ export function deriveChild(parent: HDKey, index: number): HDKey {
         } else {
             data = concat(parent.publicKey, ser32(i));
         }
-        const I = hmac(sha512Hash, parent.chainCode, data);
+        const I = hmac512(parent.chainCode, data);
         const IL = I.slice(0, 32);
         const IR = I.slice(32);
         const ilNum = beToBig(IL);

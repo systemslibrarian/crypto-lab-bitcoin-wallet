@@ -185,7 +185,9 @@ export interface Bip39Strip {
   /** True if the currently displayed strip has a valid checksum. */
   isValid(): boolean;
   /** One-click "mangle": flip an entropy bit in the last band so the last word
-   *  changes and the checksum breaks. Returns the new last word. */
+   *  changes and the checksum breaks. The bit is chosen by actually recomputing
+   *  the checksum, because a single flip only breaks it with probability
+   *  1 - 2^-CS. Returns the new last word. */
   mangleLast(): string;
 }
 
@@ -375,14 +377,27 @@ export function bip39Strip(wordlist: string[]): Bip39Strip {
   function mangleLast(): string {
     const nBands = bits.length / 11;
     const lastBand = nBands - 1;
-    // Flip the first entropy bit inside the last band (bands straddle the
-    // checksum, so its low bits are entropy). This is guaranteed to change the
-    // last word's value and, because it perturbs the entropy without fixing
-    // the checksum bits, break the checksum.
-    let target = lastBand * 11;
-    while (target < lastBand * 11 + 11 && target >= entropyLen) target++;
-    if (target >= entropyLen) target = entropyLen - 1; // fallback: last entropy bit
-    flipBit(target);
+    const first = lastBand * 11;
+    // Flipping any entropy bit inside the last band changes the last word.
+    // It does NOT reliably break the checksum: the checksum is only CS bits
+    // wide (4 for a 12-word phrase), so a random perturbation still lands on
+    // the displayed checksum about 1 time in 2^CS. Rather than assume, try each
+    // candidate bit and pick one that the recomputed checksum actually rejects.
+    let chosen = -1;
+    for (let idx = first; idx < first + 11 && idx < entropyLen; idx++) {
+      bits[idx] ^= 1;
+      const stillValid = currentChecksumValid();
+      bits[idx] ^= 1;
+      if (!stillValid) {
+        chosen = idx;
+        break;
+      }
+    }
+    // Every candidate leaving the checksum intact is astronomically unlikely
+    // (2^-7·CS for a 12-word phrase). If it ever happens, still change the word
+    // — the badge and the announcement report the real checksum state either way.
+    if (chosen < 0) chosen = first;
+    flipBit(chosen);
     return wordlist[bandValue(lastBand)] ?? '?';
   }
 

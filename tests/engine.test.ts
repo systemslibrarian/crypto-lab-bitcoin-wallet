@@ -202,12 +202,61 @@ describe('BIP-32 HD derivation — official Test Vector 1', () => {
 });
 
 describe('BIP-32 CKDpriv edge-case handling (IL >= n or child == 0 → skip index)', () => {
-  // Force the invalid branches deterministically by stubbing the HMAC output
-  // shape via a crafted parent. We can't easily make @noble return IL>=n, so we
-  // assert the loop contract directly against a synthetic reimplementation:
-  // deriveChild must never return a private key of 0 and must advance `index`
-  // if the requested one is invalid.
+  // BIP-32: "In case parse256(IL) >= n or ki = 0, the resulting key is invalid,
+  // and one should proceed with the next value for i." Both branches are
+  // unreachable with the real HMAC (probability ~2^-127), so deriveChild takes
+  // an injectable HMAC purely so the contract can be asserted rather than
+  // assumed. The production call sites pass nothing and get the real HMAC.
   const seed = hexToBytes('000102030405060708090a0b0c0d0e0f');
+  const N = secp.CURVE.n;
+
+  /** Build a 64-byte I = IL ‖ IR with the requested IL scalar. */
+  function fakeI(il: bigint): Uint8Array {
+    const out = new Uint8Array(64);
+    out.set(hexToBytes(il.toString(16).padStart(64, '0')), 0);
+    out.fill(0x42, 32); // any chain code
+    return out;
+  }
+
+  it('skips to the next index when parse256(IL) >= n', () => {
+    const m = masterKeyFromSeed(seed);
+    let calls = 0;
+    const child = deriveChild(m, 5, () => {
+      calls++;
+      // First index yields IL == n (invalid); the next yields a usable scalar.
+      return calls === 1 ? fakeI(N) : fakeI(12345n);
+    });
+    expect(calls).toBe(2);
+    expect(child.index).toBe(6);
+    expect(bytesToHex(child.privateKey)).toBe(
+      bytesToHex(hexToBytes(((12345n + BigInt('0x' + bytesToHex(m.privateKey))) % N).toString(16).padStart(64, '0'))),
+    );
+  });
+
+  it('skips to the next index when the child private key would be zero', () => {
+    const m = masterKeyFromSeed(seed);
+    const parentScalar = BigInt('0x' + bytesToHex(m.privateKey));
+    let calls = 0;
+    const child = deriveChild(m, 9, () => {
+      calls++;
+      // IL = n - parent makes (IL + parent) mod n == 0, which BIP-32 rejects.
+      return calls === 1 ? fakeI(N - parentScalar) : fakeI(777n);
+    });
+    expect(calls).toBe(2);
+    expect(child.index).toBe(10);
+    expect(bytesToHex(child.privateKey)).not.toBe('0'.repeat(64));
+  });
+
+  it('does not advance the index when the first candidate is valid', () => {
+    const m = masterKeyFromSeed(seed);
+    let calls = 0;
+    const child = deriveChild(m, 3, () => {
+      calls++;
+      return fakeI(999n);
+    });
+    expect(calls).toBe(1);
+    expect(child.index).toBe(3);
+  });
 
   it('never returns an all-zero private key across many derivations', () => {
     const m = masterKeyFromSeed(seed);

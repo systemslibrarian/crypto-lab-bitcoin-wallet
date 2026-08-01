@@ -871,7 +871,9 @@ function renderSeedSection(): HTMLElement {
       'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid');
     validateStatus.textContent = ok ? 'checksum valid' : 'invalid (bad word or checksum)';
     announce(
-      `Last word changed to ${newLast}. The BIP-39 checksum now fails — a real wallet would reject this phrase.`,
+      ok
+        ? `Last word changed to ${newLast}, but this phrase still happens to carry a valid checksum.`
+        : `Last word changed to ${newLast}. The BIP-39 checksum now fails — a real wallet would reject this phrase.`,
     );
   });
 
@@ -917,42 +919,53 @@ function renderKatPanel(): HTMLElement {
   interface Vector {
     label: string;
     source: string;
+    /** Truncated for display only — `ok` is decided on the FULL values. */
     got: string;
     expected: string;
+    /** Whole-value comparison against the published constant. */
+    ok: boolean;
   }
   const vectors: Vector[] = [];
+  const shorten = (s: string, n: number): string => (s.length > n ? s.slice(0, n) + '…' : s);
 
   // 1) privkey = 1 → canonical P2PKH address.
   try {
     const one = new Uint8Array(32);
     one[31] = 1;
     const b = deriveAddress(one);
+    const expected = '1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH';
     vectors.push({
       label: 'privkey = 1 → P2PKH',
       source: 'textbook secp256k1 base point',
       got: b.p2pkh,
-      expected: '1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH',
+      expected,
+      ok: b.p2pkh === expected,
     });
   } catch (err) {
     console.error('KAT privkey=1 failed:', err);
   }
 
-  // 2) BIP-39 Trezor vector: seed prefix from the abandon…about phrase + TREZOR.
+  // 2) BIP-39 Trezor vector: the abandon…about phrase + TREZOR. The badge
+  //    compares all 64 bytes of the derived seed; only the display is trimmed.
   try {
     const m =
       'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
     const seedHex = bytesToHex(mnemonicToSeed(m, 'TREZOR'));
+    // BIP-39 official vector: all-zero entropy, passphrase "TREZOR".
+    const expSeed =
+      'c55257c360c07c72029aebc1b53c05ed0362ada38ead3e3e9efa3708e53495531f09a6987599d18264c1e1c92f2cf141630c7a3c4ab7c81b2f001698e7463b04';
     vectors.push({
-      label: 'BIP-39 seed prefix',
+      label: 'BIP-39 seed (64 bytes)',
       source: '"abandon ×11 about" + passphrase TREZOR',
-      got: seedHex.slice(0, 16) + '…',
-      expected: 'c55257c360c07c72…',
+      got: shorten(seedHex, 16),
+      expected: shorten(expSeed, 16),
+      ok: seedHex === expSeed,
     });
   } catch (err) {
     console.error('KAT BIP-39 failed:', err);
   }
 
-  // 3) BIP-32 Test Vector 1: xprv at a mixed hardened/normal path.
+  // 3) BIP-32 Test Vector 1: xprv AND xpub at a mixed hardened/normal path.
   try {
     const seed = hexToBytes('000102030405060708090a0b0c0d0e0f');
     const k = derivePath(seed, "m/0'/1/2'/2/1000000000");
@@ -963,10 +976,11 @@ function renderKatPanel(): HTMLElement {
     const expXpub =
       'xpub6H1LXWLaKsWFhvm6RVpEL9P4KfRZSW7abD2ttkWP3SSQvnyA8FSVqNTEcYFgJS2UaFcxupHiYkro49S8yGasTvXEYBVPamhGW6cFJodrTHy';
     vectors.push({
-      label: "BIP-32 Vector 1 xprv (m/0'/1/2'/2/1000000000)",
+      label: "BIP-32 Vector 1 xprv + xpub (m/0'/1/2'/2/1000000000)",
       source: 'seed 000102…0f',
-      got: xprv.slice(0, 12) + '…' + (xpub === expXpub ? '' : ' (xpub mismatch!)'),
-      expected: expXprv.slice(0, 12) + '…',
+      got: shorten(xprv, 12),
+      expected: shorten(expXprv, 12),
+      ok: xprv === expXprv && xpub === expXpub,
     });
   } catch (err) {
     console.error('KAT BIP-32 failed:', err);
@@ -974,7 +988,7 @@ function renderKatPanel(): HTMLElement {
 
   const list = el('ul', { class: 'kat-list' });
   for (const v of vectors) {
-    const ok = v.got.replace('…', '') === v.expected.replace('…', '') && !v.got.includes('mismatch');
+    const ok = v.ok;
     const item = el('li', { class: 'kat-item' });
     const badge = el('span', {
       class: 'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid'),
