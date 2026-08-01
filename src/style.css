@@ -13,7 +13,14 @@
   --panel: #1b1f3a;
   --panel-strong: #232850;
   --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  /* Control boundaries (WCAG 2.1 SC 1.4.11). .mnemonic-input, .path-input and
+     .index-input are filled with --bg-soft (#161a36) inside --panel (#1b1f3a),
+     1.06:1 apart, so the border is the only thing delineating the field. The old
+     rgba(255,255,255,0.16) composited to ~#333846 — 1.40:1 on --bg, 1.37:1 on
+     --panel-strong. Made solid and raised along the lab's navy hue: #787da2 is
+     4.70:1 on --bg, 4.25:1 on --bg-soft, 4.03:1 on --panel, 3.52:1 on
+     --panel-strong. --line is left unchanged for decorative rules. */
+  --line-strong: #787da2;
 
   --ink-strong: #f5f5ff;
   --ink: #d8dbf0;
@@ -54,7 +61,11 @@
   --panel: #ffffff;
   --panel-strong: #f1f1fa;
   --line: rgba(20, 23, 60, 0.08);
-  --line-strong: rgba(20, 23, 60, 0.16);
+  /* See the dark-theme note above. The old rgba(20,23,60,0.16) composited to
+     ~#d2d2dc — 1.40:1 on --bg, 1.37:1 on --panel-strong. Raised along the same
+     navy hue: #767a9e is 3.86:1 on --bg, 3.57:1 on --bg-soft, 4.16:1 on
+     --panel, 3.71:1 on --panel-strong. */
+  --line-strong: #767a9e;
 
   --ink-strong: #14143c;
   --ink: #2a2c5b;
