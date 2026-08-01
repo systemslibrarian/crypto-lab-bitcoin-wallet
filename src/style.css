@@ -129,7 +129,7 @@ body {
   z-index: 100;
   padding: 10px 16px;
   background: var(--accent);
-  color: #fff;
+  color: #0d1024;
   border-radius: var(--radius-sm);
   text-decoration: none;
   font-weight: 600;
@@ -139,6 +139,13 @@ body {
   top: 12px;
   outline: 2px solid var(--accent-2);
   outline-offset: 2px;
+}
+/* The light theme's --accent (#5b39c0) is deep enough for white ink (7.52:1);
+   the dark default's --accent (#b58cff) is a pale lavender where white was only
+   2.57:1, failing WCAG 1.4.3. Dark ink is used by default (7.31:1) and the
+   light theme restores white. */
+[data-theme='light'] .skip-link {
+  color: #fff;
 }
 
 /* ---------- Hero ---------- */
