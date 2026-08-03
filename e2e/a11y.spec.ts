@@ -17,6 +17,32 @@ async function expandAll(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Neutralise motion before scanning.
+ *
+ * The byte-flow diagram animates on load, and `.bf-stage` transitions its
+ * background over 250ms. Toggling the theme therefore leaves every stage box
+ * mid-blend, and axe samples that intermediate colour as the background behind
+ * `.bf-kicker` / `.bf-sub` — reporting a contrast failure for a colour pair
+ * that exists for a quarter of a second and is in the palette at neither end.
+ * Snapping transitions off makes the scan measure the colours that actually
+ * ship. Nothing about the palette or the rule set is relaxed.
+ */
+async function freezeMotion(page: Page): Promise<void> {
+  // Let the byte-flow finish its beats so the final, settled state is scanned.
+  await page.waitForFunction(
+    () => document.querySelector('[data-bytes="bech"]')?.textContent !== '—',
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.addStyleTag({
+    content: `*, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+    }`,
+  });
+}
+
 async function scan(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   const summary = results.violations.map((v) => ({
@@ -31,12 +57,14 @@ async function scan(page: Page): Promise<void> {
 test('no WCAG A/AA violations in dark theme', async ({ page }) => {
   await page.goto('.');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await freezeMotion(page);
   await expandAll(page);
   await scan(page);
 });
 
 test('no WCAG A/AA violations in light theme', async ({ page }) => {
   await page.goto('.');
+  await freezeMotion(page);
   await page.locator('#cl-theme-toggle').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expandAll(page);

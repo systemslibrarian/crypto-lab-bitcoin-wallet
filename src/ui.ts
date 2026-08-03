@@ -439,8 +439,20 @@ function renderMemorizeMode(getWords: () => string[]): HTMLElement {
 
   let target: string[] = [];
   let placed: number = 0;
+  // A wrong guess schedules a revert of the slot it landed in. If the learner
+  // answers again before it fires, that timer must be cancelled — otherwise it
+  // wipes a slot that has since been filled CORRECTLY, leaving a green slot
+  // showing an em dash.
+  let errTimer: number | null = null;
+  function clearErrTimer(): void {
+    if (errTimer !== null) {
+      clearTimeout(errTimer);
+      errTimer = null;
+    }
+  }
 
   function reset(): void {
+    clearErrTimer();
     target = [];
     placed = 0;
     slots.replaceChildren();
@@ -487,6 +499,8 @@ function renderMemorizeMode(getWords: () => string[]): HTMLElement {
     const slot = slots.querySelector<HTMLElement>(`[data-idx="${placed}"]`);
     if (!slot) return;
     const slotWord = slot.querySelector<HTMLElement>('.memorize-slot-word');
+    clearErrTimer();
+    slot.classList.remove('memorize-slot--err');
     if (slotWord) slotWord.textContent = word;
     if (word === expected) {
       slot.classList.add('memorize-slot--ok');
@@ -503,7 +517,8 @@ function renderMemorizeMode(getWords: () => string[]): HTMLElement {
       slot.classList.add('memorize-slot--err');
       announce(`Wrong word for slot ${placed + 1}. Expected ${expected}.`);
       liveStatus.textContent = `That word is out of order for slot ${placed + 1}. Try again.`;
-      setTimeout(() => {
+      errTimer = window.setTimeout(() => {
+        errTimer = null;
         slot.classList.remove('memorize-slot--err');
         if (slotWord) slotWord.textContent = '—';
       }, 1200);
@@ -704,6 +719,28 @@ function renderSeedSection(): HTMLElement {
   validateCard.append(validateInput, el('div', { class: 'validate-row' }, [validateBtn, validateStatus]));
   section.append(validateCard);
 
+  // The badge is a verdict about ONE exact phrase. Editing the textarea makes
+  // it a verdict about nothing, so it has to retire the moment the text stops
+  // matching what was actually checked — otherwise a green "checksum valid"
+  // keeps sitting above a phrase nobody validated.
+  let validatedText: string | null = null;
+  function paintValidateVerdict(text: string, ok: boolean): void {
+    validatedText = text;
+    validateStatus.className =
+      'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid');
+    validateStatus.textContent = ok ? 'checksum valid' : 'invalid (bad word or checksum)';
+  }
+  function resetValidateVerdict(): void {
+    validatedText = null;
+    validateStatus.className = 'scenario-status scenario-status--pending';
+    validateStatus.textContent = 'awaiting input';
+  }
+  validateInput.addEventListener('input', () => {
+    if (validatedText === null || validateInput.value === validatedText) return;
+    resetValidateVerdict();
+    announce('Phrase edited — the previous checksum result no longer applies. Validate again.');
+  });
+
   // Derive-along-path
   const deriveCard = el('div', { class: 'panel-card derive-card' });
   deriveCard.append(
@@ -813,8 +850,12 @@ function renderSeedSection(): HTMLElement {
       announce("Invalid path. It must start with m.");
       return;
     }
-    const indexValue = Number(indexInput.value);
-    if (!Number.isFinite(indexValue) || indexValue < 0) {
+    // Number('') is 0 and Number('1.5') is finite, so a blank or fractional
+    // field used to derive a real address under a path the summary printed as
+    // "…/1.5". Require an actual non-negative integer.
+    const rawIndex = indexInput.value.trim();
+    const indexValue = Number(rawIndex);
+    if (rawIndex === '' || !Number.isInteger(indexValue) || indexValue < 0) {
       derivedSummary.textContent = 'Index must be a non-negative integer.';
       announce('Index must be a non-negative integer.');
       return;
@@ -867,9 +908,7 @@ function renderSeedSection(): HTMLElement {
     const mangled = strip.getWords().join(' ');
     validateInput.value = mangled;
     const ok = validateMnemonic(mangled, WORDLIST);
-    validateStatus.className =
-      'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid');
-    validateStatus.textContent = ok ? 'checksum valid' : 'invalid (bad word or checksum)';
+    paintValidateVerdict(mangled, ok);
     announce(
       ok
         ? `Last word changed to ${newLast}, but this phrase still happens to carry a valid checksum.`
@@ -880,15 +919,14 @@ function renderSeedSection(): HTMLElement {
   validateBtn.addEventListener('click', () => {
     const input = validateInput.value.trim();
     if (!input) {
-      validateStatus.className = 'scenario-status scenario-status--pending';
-      validateStatus.textContent = 'awaiting input';
+      resetValidateVerdict();
       announce('Awaiting mnemonic input.');
       return;
     }
     const ok = validateMnemonic(input, WORDLIST);
-    validateStatus.className =
-      'scenario-status ' + (ok ? 'scenario-status--valid' : 'scenario-status--invalid');
-    validateStatus.textContent = ok ? 'checksum valid' : 'invalid (bad word or checksum)';
+    // Pin the verdict to the raw field contents, so any later edit — including
+    // one that only changes whitespace — retires it.
+    paintValidateVerdict(validateInput.value, ok);
     announce(ok ? 'Mnemonic checksum is valid.' : 'Mnemonic is invalid — bad word or checksum.');
   });
 

@@ -199,6 +199,40 @@ describe('BIP-32 HD derivation — official Test Vector 1', () => {
     expect(bytesToHex(a0.privateKey)).not.toBe(bytesToHex(a1.privateKey));
     expect(deriveAddress(a0.privateKey).p2pkh).not.toBe(deriveAddress(a1.privateKey).p2pkh);
   });
+
+  // Regression: a malformed segment used to reach parseInt, yield NaN, and
+  // serialize through ser32 as four zero bytes — so "m/abc/0" quietly derived
+  // the index-0 child and every caller believed it had the path it asked for.
+  // A path that cannot be parsed must throw, and the message must name the
+  // segment so the UI can show a learner what it choked on.
+  it.each([
+    ['m/abc/0', 'abc'],
+    ['m/1.5/0', '1.5'],
+    ['m/-1/0', '-1'],
+    ["m/44'/0'/0'/0/", ''],
+    ['m/0x10/0', '0x10'],
+  ])('derivePath rejects the malformed path %s by naming the segment', (path, segment) => {
+    expect(() => derivePath(seed, path)).toThrow(new RegExp(`"${segment.replace('.', '\\.')}"`));
+  });
+
+  it('derivePath rejects an index at or above 2^31 as out of range', () => {
+    expect(() => derivePath(seed, 'm/2147483648')).toThrow(/out of range/);
+    // 2^31 - 1 is the largest non-hardened index and must still work.
+    expect(() => derivePath(seed, 'm/2147483647')).not.toThrow();
+  });
+
+  it('derivePath requires the path to start with m', () => {
+    expect(() => derivePath(seed, "44'/0'/0'/0/0")).toThrow(/must start with "m"/);
+    expect(() => derivePath(seed, 'm')).not.toThrow();
+  });
+
+  it('deriveChild rejects a non-integer or out-of-range index instead of silently using 0', () => {
+    const m = masterKeyFromSeed(seed);
+    expect(() => deriveChild(m, Number.NaN)).toThrow(/invalid child index/);
+    expect(() => deriveChild(m, 1.5)).toThrow(/invalid child index/);
+    expect(() => deriveChild(m, -1)).toThrow(/invalid child index/);
+    expect(() => deriveChild(m, 2 ** 32)).toThrow(/invalid child index/);
+  });
 });
 
 describe('BIP-32 CKDpriv edge-case handling (IL >= n or child == 0 → skip index)', () => {

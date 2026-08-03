@@ -299,6 +299,13 @@ export type CkdHmac = (chainCode: Uint8Array, data: Uint8Array) => Uint8Array;
 const realCkdHmac: CkdHmac = (chainCode, data) => hmac(sha512Hash, chainCode, data);
 
 export function deriveChild(parent: HDKey, index: number, hmac512: CkdHmac = realCkdHmac): HDKey {
+    // A child index is a uint32. Without this guard a NaN index (the value
+    // parseInt returns for a garbage path segment) sails through: NaN >= HARDENED
+    // is false, ser32(NaN) serializes as 0x00000000, and the caller silently
+    // gets the index-0 child back as if nothing were wrong.
+    if (!Number.isInteger(index) || index < 0 || index > 0xffffffff) {
+        throw new Error(`invalid child index ${index} — must be an integer in [0, 2^32)`);
+    }
     const hardened = index >= HARDENED;
     // BIP-32 CKDpriv: on a rare invalid case (parse256(IL) >= n, or the resulting
     // child private key == 0) the spec says the index is invalid and derivation
@@ -333,13 +340,33 @@ export function deriveChild(parent: HDKey, index: number, hmac512: CkdHmac = rea
 }
 
 // derive along a path like "m/44'/0'/0'/0/0"
+//
+// Every segment is validated before it is used. The old code ran each segment
+// through parseInt and fed the result straight to deriveChild, so "m/abc/0"
+// produced NaN, ser32(NaN) wrote four zero bytes, and the caller got the
+// index-0 child back with no error at all — a wrong address reported as a
+// successful derivation. Malformed paths now throw a message that names the
+// offending segment.
 export function derivePath(seed: Uint8Array, path: string): HDKey {
     let key = masterKeyFromSeed(seed);
-    const parts = path.split('/').slice(1); // drop "m"
+    const trimmed = path.trim();
+    if (trimmed !== 'm' && !trimmed.startsWith('m/')) {
+        throw new Error(`path must start with "m", got "${path}"`);
+    }
+    const parts = trimmed.split('/').slice(1); // drop "m"
     for (const p of parts) {
         const hardened = p.endsWith("'") || p.endsWith('h');
-        const idx = parseInt(p.replace(/['h]/g, ''), 10) + (hardened ? HARDENED : 0);
-        key = deriveChild(key, idx);
+        const digits = hardened ? p.slice(0, -1) : p;
+        if (!/^\d+$/.test(digits)) {
+            throw new Error(
+                `invalid path segment "${p}" — expected a decimal index, optionally suffixed with ' or h`,
+            );
+        }
+        const n = Number(digits);
+        if (!Number.isSafeInteger(n) || n >= HARDENED) {
+            throw new Error(`path segment "${p}" is out of range — the index must be below 2^31`);
+        }
+        key = deriveChild(key, n + (hardened ? HARDENED : 0));
     }
     return key;
 }
