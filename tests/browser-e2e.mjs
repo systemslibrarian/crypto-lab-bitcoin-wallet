@@ -23,7 +23,7 @@ import puppeteer from 'puppeteer';
 import { AxePuppeteer } from '@axe-core/puppeteer';
 
 // Use a base-name-derived port to avoid clashing with sibling crypto-lab previews.
-const PORT = 4322;
+const PORT = 4718;
 const BASE = `http://localhost:${PORT}/crypto-lab-bitcoin-wallet/`;
 
 function startPreview() {
