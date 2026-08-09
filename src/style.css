@@ -297,9 +297,18 @@ button {
   cursor: pointer;
   transition: filter 0.15s ease, transform 0.05s ease;
 }
-[data-theme='light'] button {
-  color: #ffffff;
-}
+/* Deleted: `[data-theme='light'] button { color: #ffffff }`.
+   It was a blanket rule for the ACCENT-FILLED buttons, but it selects every
+   <button> on the page at (0,1,1) — enough to beat any single-class rule a
+   button sets for itself. `.memorize-chip` is a <button> with a near-white
+   `--panel-strong` fill and its own `color: var(--ink-strong)` at (0,1,0), so
+   the blanket rule won and painted the drill's word chips WHITE ON #f1f1fa:
+   1.12:1, in the exercise whose entire job is reading words back. The author
+   had already met this trap once and patched the one class they remembered
+   (`[data-theme='light'] button.secondary`). It was also redundant: the base
+   rule's `color: var(--bg)` is #f6f6fb in this theme, which is what the accent
+   fill wants anyway. Buttons that change their background now keep their own
+   ink, and the `.secondary` patch below is no longer load-bearing. */
 button:hover {
   filter: brightness(1.08);
 }

@@ -394,7 +394,15 @@ function renderKeyToAddress(): HTMLElement {
 // Derivation-tree visual (Item 8)
 // =====================================================================
 function renderDerivationTree(): HTMLElement {
-  const tree = el('div', { class: 'derivation-tree', 'aria-label': 'BIP-44 derivation path' });
+  // role="group", not a bare div: `aria-label` on a role-less element is
+  // PROHIBITED and browsers discard it, so this diagram reached a screen reader
+  // with no name at all. axe files that under `incomplete`, never `violations`,
+  // which is why a violations-only gate never mentioned it.
+  const tree = el('div', {
+    class: 'derivation-tree',
+    role: 'group',
+    'aria-label': 'BIP-44 derivation path',
+  });
   PATH_STEPS.forEach((step, i) => {
     const node = el('div', {
       class: 'tree-node' + (step.hardened ? ' tree-node--hardened' : ''),
@@ -650,7 +658,11 @@ function renderSeedSection(): HTMLElement {
   // Mnemonic card
   const mnemonicCard = el('div', { class: 'panel-card mnemonic-card', 'aria-live': 'polite' });
   mnemonicCard.append(el('h3', { class: 'card-title', text: 'Your fresh mnemonic' }));
-  const wordGrid = el('div', { class: 'mnemonic-grid', role: 'list' });
+  // The role is applied when the words arrive, not before. An empty
+  // `role="list"` has no `listitem` children, which axe reports as
+  // `aria-required-children` — and at first paint this grid is empty, so the
+  // lab shipped that on every load. `setMnemonicRole` below promotes it.
+  const wordGrid = el('div', { class: 'mnemonic-grid', role: 'group' });
   const phraseRow = el('div', { class: 'mnemonic-phrase-row' });
   const phraseLine = el('div', { class: 'mono mnemonic-phrase', text: '— click Generate —' });
   phraseRow.append(phraseLine);
@@ -814,6 +826,9 @@ function renderSeedSection(): HTMLElement {
 
     wordGrid.replaceChildren();
     const words = mnemonic.split(' ');
+    // Promote to a real list only now that it has items to hold. See the
+    // `role: 'group'` note where wordGrid is created.
+    wordGrid.setAttribute('role', 'list');
     words.forEach((w, i) => {
       const cell = el('div', { class: 'mnemonic-word', role: 'listitem' });
       cell.append(

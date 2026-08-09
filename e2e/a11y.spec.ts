@@ -1,72 +1,33 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { test } from '@playwright/test';
+import { boot, driveAllStates, NARROW } from './gate';
 
 /**
- * WCAG regression gate. Deploys are already gated on the BIP test vectors;
- * this gates them on accessibility the same way. Scans the full page with
- * every <details> expanded, in both the dark (default) and light themes.
- */
-
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
-
-async function expandAll(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    for (const details of document.querySelectorAll('details')) {
-      details.open = true;
-    }
-  });
-}
-
-/**
- * Neutralise motion before scanning.
+ * WCAG A/AA regression gate.
  *
- * The byte-flow diagram animates on load, and `.bf-stage` transitions its
- * background over 250ms. Toggling the theme therefore leaves every stage box
- * mid-blend, and axe samples that intermediate colour as the background behind
- * `.bf-kicker` / `.bf-sub` — reporting a contrast failure for a colour pair
- * that exists for a quarter of a second and is in the palette at neither end.
- * Snapping transitions off makes the scan measure the colours that actually
- * ship. Nothing about the palette or the rule set is relaxed.
+ * The lab is driven the way a visitor drives it: a private key generated and
+ * its address derived, a 12-word mnemonic generated, its last word mangled so
+ * the checksum refuses the phrase, validation run against a bad phrase and then
+ * retired by an edit, an address derived at a native-segwit path, the
+ * memorisation drill started and reset, and every disclosure opened by its own
+ * summary. Every resulting state is scanned in both themes at desktop and phone
+ * width.
+ *
+ * See `gate.ts` for why nothing is injected into the page, why reduced motion
+ * is asked for rather than forced, why every step is scanned rather than only
+ * the first, and why `violations` is not the whole oracle.
  */
-async function freezeMotion(page: Page): Promise<void> {
-  // Let the byte-flow finish its beats so the final, settled state is scanned.
-  await page.waitForFunction(
-    () => document.querySelector('[data-bytes="bech"]')?.textContent !== '—',
-    undefined,
-    { timeout: 10_000 },
-  );
-  await page.addStyleTag({
-    content: `*, *::before, *::after {
-      transition: none !important;
-      animation: none !important;
-    }`,
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`no WCAG A/AA violations in ${theme} theme`, async ({ page }) => {
+    test.setTimeout(900_000);
+    await boot(page, theme);
+    await driveAllStates(page, theme);
+  });
+
+  test(`no WCAG A/AA violations in ${theme} theme at 380px`, async ({ page }) => {
+    test.setTimeout(900_000);
+    await page.setViewportSize(NARROW);
+    await boot(page, theme);
+    await driveAllStates(page, `${theme} @380px`);
   });
 }
-
-async function scan(page: Page): Promise<void> {
-  const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  const summary = results.violations.map((v) => ({
-    id: v.id,
-    impact: v.impact,
-    help: v.help,
-    nodes: v.nodes.map((n) => n.target.join(' ')).slice(0, 5),
-  }));
-  expect(summary).toEqual([]);
-}
-
-test('no WCAG A/AA violations in dark theme', async ({ page }) => {
-  await page.goto('.');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await freezeMotion(page);
-  await expandAll(page);
-  await scan(page);
-});
-
-test('no WCAG A/AA violations in light theme', async ({ page }) => {
-  await page.goto('.');
-  await freezeMotion(page);
-  await page.locator('#cl-theme-toggle').click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expandAll(page);
-  await scan(page);
-});

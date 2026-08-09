@@ -10,7 +10,13 @@
       // Anti-flash: apply saved theme before paint. Defaults to dark.
       (function () {
         try {
-          var saved = localStorage.getItem('crypto-lab-theme');
+          // 'theme' — the key the shared header's toggle actually writes, and
+          // the key 159 of the 165 labs in this fleet read. This script used to
+          // read 'crypto-lab-theme', which NOTHING writes: the only reachable
+          // toggle is the header's (each lab's own is hidden by the header CSS),
+          // so a visitor who switched to light and reloaded got dark back every
+          // time. The theme was never persisted at all.
+          var saved = localStorage.getItem('theme');
           var theme = saved === 'light' ? 'light' : 'dark';
           document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {
