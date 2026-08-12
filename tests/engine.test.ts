@@ -468,6 +468,10 @@ describe('BIP-32 invalid-key branches fail closed instead of wrapping', () => {
     expect(key.publicKey).toHaveLength(33);
   });
 
+  // NOTE on mutation-testing these two: removing the bound does not make them
+  // fail, it makes them HANG. `for (let i = index; ; i++)` with every candidate
+  // invalid is a synchronous infinite loop, which no test timeout can interrupt.
+  // That is the shape of the defect the bound closes.
   it('an always-invalid normal derivation stops at 0x7fffffff instead of crossing into hardened', () => {
     const m = masterKeyFromSeed(seed);
     // Every candidate invalid: IL >= n on every call.
