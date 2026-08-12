@@ -474,6 +474,127 @@ test('flipping one entropy bit re-indexes its band and the badge tracks the reco
 });
 
 // ===========================================================================
+// 5b. The other half of the checksum lesson
+//
+// "Mangle the last word" searches for a corruption the checksum CATCHES, which
+// made the page's demonstration agree with a claim that is false: a 12-word
+// phrase carries 4 checksum bits, so a wrong word passes about 1 time in 16.
+// Measured with this repo's engine, 61,141 of 982,560 single-word substitutions
+// across 40 random phrases (6.22%) still validate, flat across all 12 positions.
+// The page now has to be able to show one, and the validator has to agree.
+// ===========================================================================
+
+test('the page can produce a one-word change the checksum misses, and both the badge and the validator call it valid', async ({
+  page,
+}) => {
+  await page.goto('.');
+  const before = await generateMnemonic(page);
+
+  await page.locator('.bip39-miss-btn').click();
+
+  const after = await readStrip(page);
+  const changedWords = after.words.map((w) => w.text);
+
+  // Exactly one word moved — a single entropy bit lives in exactly one band.
+  const differing = changedWords
+    .map((w, i) => (w === before[i] ? -1 : i))
+    .filter((i) => i >= 0);
+  expect(differing, `expected exactly one changed word, got ${JSON.stringify(differing)}`)
+    .toHaveLength(1);
+
+  // …and the phrase is STILL valid, confirmed by an independent SHA-256 rather
+  // than by trusting the badge.
+  expect(
+    checksumHolds(after),
+    'the control is supposed to find a corruption the checksum misses; this one did not survive',
+  ).toBe(true);
+  expect(after.checkline).toContain('✓ checksum valid');
+
+  // The engine's own validator agrees — the mirrored phrase passes.
+  await expect(page.locator('#validate-input')).toHaveValue(changedWords.join(' '));
+  await expect(page.locator('.validate-row .scenario-status')).toHaveText('checksum valid');
+
+  // The note has to state the count it found, and the count must be real: zero
+  // survivors would mean the control had nothing to demonstrate.
+  const note = ((await page.locator('.bip39-miss-note').textContent()) ?? '').replace(/\s+/g, ' ');
+  const m = note.match(/(\d+) of the 128 single-bit changes/);
+  expect(m, `miss note should quote a survivor count: ${note}`).not.toBeNull();
+  expect(Number(m![1]), 'survivor count must be non-zero').toBeGreaterThan(0);
+  expect(Number(m![1])).toBeLessThanOrEqual(128);
+  expect(note).toContain(`Word ${differing[0] + 1} changed`);
+  expect(note).toContain('not proof that it is your phrase');
+
+  // The live region says the same thing, so a screen-reader user gets the
+  // finding and not just the mangle-button version of the lesson.
+  await expect(page.locator('#app > [role="status"]')).toContainText('still validates');
+});
+
+test('the page never claims a wrong word always fails validation', async ({ page }) => {
+  await page.goto('.');
+  const body = ((await page.locator('#app').textContent()) ?? '').replace(/\s+/g, ' ');
+  // The exact sentence the seed-step card used to carry.
+  expect(body).not.toContain('typing one wrong word makes the whole phrase fail to validate');
+  // …replaced by the measured statement, including the split of the final word.
+  expect(body).toContain('7 entropy bits plus those 4');
+  expect(body).toMatch(/about 1 in 16/);
+});
+
+// ===========================================================================
+// 5c. The five-address table is derived from the BIP-44 subtree, and says so
+// ===========================================================================
+
+test('the address table names the purpose subtree it derives from, and the ones it does not', async ({
+  page,
+}) => {
+  await page.goto('.');
+  await generateMnemonic(page);
+  await expect(page.locator('.address-list-table tbody tr')).toHaveCount(5);
+
+  const help = ((await page.locator('.address-list-card').textContent()) ?? '').replace(/\s+/g, ' ');
+  // The claim that used to sit over a bc1 column derived from m/44'.
+  expect(help).not.toContain('.getNextAddress() exactly this way');
+  expect(help).toContain('BIP-44');
+  expect(help).toContain('would very likely never look for');
+
+  // All four purpose rows are present, with their real paths, and the row this
+  // lab actually implements is the 44' one.
+  const rows = await page.$$eval('.purpose-table tbody tr', (trs) =>
+    trs.map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.trim() ?? '')),
+  );
+  expect(rows.map((r) => r[0])).toEqual(["44'", "49'", "84'", "86'"]);
+  expect(rows.find((r) => r[0] === "84'")![2]).toBe("m/84'/0'/0'/0/i");
+  expect(rows.find((r) => r[0] === "86'")![2]).toBe("m/86'/0'/0'/0/i");
+  expect(rows.find((r) => r[0] === "84'")![3]).toContain('P2WPKH');
+
+  // The path box really is on the 44' subtree, which is what makes the note true.
+  await expect(page.locator('#path-input')).toHaveValue(/^m\/44'/);
+});
+
+// ===========================================================================
+// 5d. "Only the seed can spend" was contradicted three panels down
+// ===========================================================================
+
+test('the xpub card does not claim only the seed can spend, while the page prints a child private key', async ({
+  page,
+}) => {
+  await page.goto('.');
+  await generateMnemonic(page);
+
+  // The derivation panel prints a spendable child secret — priv hex and WIF.
+  const rows = await derivedRows(page).allTextContents();
+  const flat = rows.join(' ').replace(/\s+/g, ' ');
+  expect(flat, 'the derivation panel must print a spendable child secret').toMatch(/priv hex\s*[0-9a-f]{64}/);
+  expect(flat).toMatch(/WIF\s*[KL5][1-9A-HJ-NP-Za-km-z]{50,}/);
+
+  const concepts = ((await page.locator('.concept-card').allTextContents()) ?? [])
+    .join(' ')
+    .replace(/\s+/g, ' ');
+  expect(concepts).not.toContain('Only the seed (or a hardware wallet holding it) can produce signatures');
+  expect(concepts).toContain('any private key below it spends its own outputs');
+  expect(concepts).toContain('reveals the whole derivable address graph');
+});
+
+// ===========================================================================
 // 6. The validator: pass, fail-with-cause, and no verdict outliving its input
 // ===========================================================================
 test('the validator passes the official phrase, names its failures, and retires the verdict when the phrase is edited', async ({

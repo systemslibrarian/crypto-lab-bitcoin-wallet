@@ -226,10 +226,28 @@ export interface HDKey {
     parentFingerprint?: number;
 }
 
-export function masterKeyFromSeed(seed: Uint8Array): HDKey {
-    const I = hmac(sha512Hash, new TextEncoder().encode('Bitcoin seed'), seed);
+/** The HMAC-SHA512 used by the master-key step. Injectable ONLY so the test
+ *  suite can force the two invalid branches BIP-32 defines, which are
+ *  unreachable with the real HMAC (probability ~2^-127). */
+export type MasterHmac = (key: Uint8Array, data: Uint8Array) => Uint8Array;
+const realMasterHmac: MasterHmac = (key, data) => hmac(sha512Hash, key, data);
+
+export function masterKeyFromSeed(seed: Uint8Array, hmac512: MasterHmac = realMasterHmac): HDKey {
+    const I = hmac512(new TextEncoder().encode('Bitcoin seed'), seed);
     const IL = I.slice(0, 32);
     const IR = I.slice(32);
+    // BIP-32: "In case parse256(IL) is 0 or >= n, the master key is invalid."
+    // This used to be left to @noble's key check, which throws a generic
+    // "invalid private key" — the same message a caller gets for any bad key,
+    // naming neither the standard nor the remedy. The spec's remedy is not to
+    // adjust the seed: it is to obtain new seed material.
+    const ilNum = beToBig(IL);
+    if (ilNum === 0n || ilNum >= N) {
+        throw new Error(
+            'invalid BIP-32 master key: parse256(IL) is 0 or >= the secp256k1 group order. ' +
+            'The seed must be replaced with fresh material — it cannot be adjusted.',
+        );
+    }
     return { privateKey: IL, chainCode: IR, publicKey: secp.getPublicKey(IL, true), depth: 0, index: 0, parentFingerprint: 0 };
 }
 
@@ -249,10 +267,33 @@ export function keyFingerprint(publicKey: Uint8Array): number {
     return ((h[0] << 24) | (h[1] << 16) | (h[2] << 8) | h[3]) >>> 0;
 }
 
+/**
+ * Extended-key fields are fixed width: depth is one byte, the child index is
+ * four. `depth & 0xff` silently wrapped a depth of 256 back to 0, serialising a
+ * key that claims to be the master. A path deep enough to reach that is absurd
+ * but reachable — the path box takes free text — and silent truncation is the
+ * wrong answer to it either way.
+ */
+function assertSerializable(key: HDKey): void {
+    if (!Number.isInteger(key.depth) || key.depth < 0 || key.depth > 255) {
+        throw new Error(`cannot serialize an extended key at depth ${key.depth} — the depth field is one byte (0-255)`);
+    }
+    if (!Number.isInteger(key.index) || key.index < 0 || key.index > 0xffffffff) {
+        throw new Error(`cannot serialize an extended key with child index ${key.index} — the index field is a uint32`);
+    }
+    if (key.chainCode.length !== 32) {
+        throw new Error(`cannot serialize an extended key with a ${key.chainCode.length}-byte chain code — it must be 32`);
+    }
+}
+
 export function serializeXprv(key: HDKey): string {
+    assertSerializable(key);
+    if (key.privateKey.length !== 32) {
+        throw new Error(`cannot serialize an xprv with a ${key.privateKey.length}-byte private key — it must be 32`);
+    }
     const payload = concat(
         ser32u(XPRV_VERSION),
-        new Uint8Array([key.depth & 0xff]),
+        new Uint8Array([key.depth]),
         ser32u(key.parentFingerprint ?? 0),
         ser32u(key.index),
         key.chainCode,
@@ -262,9 +303,13 @@ export function serializeXprv(key: HDKey): string {
 }
 
 export function serializeXpub(key: HDKey): string {
+    assertSerializable(key);
+    if (key.publicKey.length !== 33) {
+        throw new Error(`cannot serialize an xpub with a ${key.publicKey.length}-byte public key — it must be 33 (compressed)`);
+    }
     const payload = concat(
         ser32u(XPUB_VERSION),
-        new Uint8Array([key.depth & 0xff]),
+        new Uint8Array([key.depth]),
         ser32u(key.parentFingerprint ?? 0),
         ser32u(key.index),
         key.chainCode,
@@ -311,7 +356,25 @@ export function deriveChild(parent: HDKey, index: number, hmac512: CkdHmac = rea
     // child private key == 0) the spec says the index is invalid and derivation
     // must proceed with the *next* index. We loop rather than recurse so the
     // final `index` we report is the one actually used.
+    //
+    // The retry has to stay inside the domain it started in. `hardened` is fixed
+    // from the ORIGINAL index, so an unbounded `i++` had two boundary faults:
+    // retrying past normal index 0x7fffffff produced 0x80000000, which ser32
+    // serialises with the hardened bit set while the data construction stays
+    // non-hardened — a child neither domain would reproduce; and retrying past
+    // 0xffffffff produced 0x100000000, which ser32 truncates back to 0, silently
+    // re-deriving the index-0 child. Both need the real HMAC to land on a
+    // ~2^-127 value first, so neither is reachable in practice — but the loop
+    // has no business permitting them, and the injectable HMAC below means a
+    // test can reach them.
+    const maxIndex = hardened ? 0xffffffff : 0x7fffffff;
     for (let i = index; ; i++) {
+        if (i > maxIndex) {
+            throw new Error(
+                `no valid child index remains at or above ${index}: every candidate up to ` +
+                `${maxIndex} (the top of the ${hardened ? 'hardened' : 'normal'} range) was invalid`,
+            );
+        }
         let data: Uint8Array;
         if (hardened) {
             data = concat(new Uint8Array([0]), parent.privateKey, ser32(i));

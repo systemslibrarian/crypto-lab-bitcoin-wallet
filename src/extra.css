@@ -885,6 +885,30 @@ button.bip39-bit--one {
 .bip39-checknote {
   color: var(--ink);
 }
+/* The "checksum missed this one" readout. It is the counterweight to the
+   mangle button, so it has to read as a finding, not as a hint. */
+.bip39-miss-note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--panel-2, var(--panel));
+  border-left: 3px solid var(--accent-2);
+  border-radius: 6px;
+}
+.bip39-miss-note[hidden] {
+  display: none;
+}
+/* Purpose-subtree correction under the five-address table. */
+.purpose-note {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line, var(--panel-2));
+}
+.purpose-table {
+  font-size: 12.5px;
+}
 
 /* ================================================================
    Inline glossary (dfn tooltips)

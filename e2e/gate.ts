@@ -379,7 +379,7 @@ export async function driveAllStates(page: Page, theme: string): Promise<void> {
   // ── Validation, both verdicts ────────────────────────────────────────────
   const phrase = await page.locator('#validate-input').inputValue();
   await page.locator('#validate-input').fill('abandon abandon abandon');
-  await page.getByRole('button', { name: 'Validate' }).click();
+  await page.getByRole('button', { name: 'Validate', exact: true }).click();
   await expect(page.locator('.scenario-status--invalid').first()).toBeVisible();
   await scanAt('validation rejects a bad phrase');
 

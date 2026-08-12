@@ -311,3 +311,214 @@ describe('BIP-32 CKDpriv edge-case handling (IL >= n or child == 0 → skip inde
     expect(c.index).toBe(7);
   });
 });
+
+// ===========================================================================
+// The 4-bit checksum is typo detection, not identity
+//
+// The page used to say "typing one wrong word makes the whole phrase fail to
+// validate", and this file backed it with ONE substitution — `about` -> `zoo` —
+// which happens to fail. That is a case where the claim holds, chosen from a
+// population where it often does not. The measurement below is the population.
+// ===========================================================================
+describe('a valid BIP-39 checksum is not proof the phrase is the intended one', () => {
+  it('about 1 in 16 single-word substitutions still validate, at every position', () => {
+    // Full enumeration over a handful of phrases: 12 positions x 2,047
+    // alternatives each. Deterministic entropy so the count is reproducible.
+    const TRIALS = 4;
+    let totalSubs = 0;
+    let stillValid = 0;
+    const perPosition = new Array(12).fill(0);
+
+    for (let t = 0; t < TRIALS; t++) {
+      const entropy = new Uint8Array(16);
+      for (let i = 0; i < 16; i++) entropy[i] = (i * 37 + t * 101) & 0xff;
+      const words = entropyToMnemonic(entropy, WORDLIST).split(' ');
+      expect(validateMnemonic(words.join(' '), WORDLIST), 'base phrase must be valid').toBe(true);
+
+      for (let p = 0; p < 12; p++) {
+        for (const w of WORDLIST) {
+          if (w === words[p]) continue;
+          const alt = words.slice();
+          alt[p] = w;
+          totalSubs++;
+          if (validateMnemonic(alt.join(' '), WORDLIST)) {
+            stillValid++;
+            perPosition[p]++;
+          }
+        }
+      }
+    }
+
+    expect(totalSubs).toBe(TRIALS * 12 * 2047);
+    // The checksum is 4 bits, so the survival rate is ~1/16. Anything far from
+    // that means the validator changed shape; anything at 0 would mean the
+    // "one wrong word always fails" claim had somehow become true, and the copy
+    // would need to change back.
+    const rate = stillValid / totalSubs;
+    expect(stillValid, `${stillValid} of ${totalSubs} substitutions survived`).toBeGreaterThan(0);
+    expect(rate).toBeGreaterThan(0.04);
+    expect(rate).toBeLessThan(0.09);
+
+    // Flat across positions: the last word is NOT special. It carries 7 entropy
+    // bits and 4 checksum bits, so corrupting it is no more detectable than
+    // corrupting the first.
+    for (let p = 0; p < 12; p++) {
+      expect(perPosition[p], `position ${p + 1} survivors`).toBeGreaterThan(0);
+      expect(perPosition[p] / (TRIALS * 2047)).toBeGreaterThan(0.03);
+      expect(perPosition[p] / (TRIALS * 2047)).toBeLessThan(0.10);
+    }
+  });
+
+  it('a single entropy-bit flip that the checksum misses always exists to find', () => {
+    // This is exactly what the page's "Find a change the checksum misses" button
+    // does. The strip keeps the DISPLAYED checksum bits when an entropy bit is
+    // flipped — it does not recompute them — so the phrase stays valid whenever
+    // the recomputed first 4 checksum bits happen to match the old ones, about
+    // 1 time in 16. Each entropy bit belongs to exactly one 11-bit band, so a
+    // single flip changes exactly one word.
+    //
+    // The button is dead if no flip ever survives, so this requires a strictly
+    // positive count on every trial rather than merely tolerating zero.
+    const bitsOf = (bytes: Uint8Array): number[] => {
+      const out: number[] = [];
+      for (const b of bytes) for (let j = 7; j >= 0; j--) out.push((b >> j) & 1);
+      return out;
+    };
+    const wordsOf = (bits: number[]): string[] => {
+      const out: string[] = [];
+      for (let b = 0; b * 11 < bits.length; b++) {
+        let v = 0;
+        for (let i = 0; i < 11; i++) v = (v << 1) | bits[b * 11 + i];
+        out.push(WORDLIST[v]);
+      }
+      return out;
+    };
+
+    let trialsWithSurvivors = 0;
+    for (let t = 0; t < 8; t++) {
+      const entropy = new Uint8Array(16);
+      for (let i = 0; i < 16; i++) entropy[i] = (i * 53 + t * 17) & 0xff;
+      const phrase = entropyToMnemonic(entropy, WORDLIST);
+      const original = phrase.split(' ');
+      expect(validateMnemonic(phrase, WORDLIST)).toBe(true);
+      // The 132 displayed bits: 128 entropy + the 4 checksum bits as generated.
+      const shown = bitsOf(entropy).concat(
+        // Recover the checksum bits from the phrase itself, which is what the
+        // strip renders.
+        (() => {
+          const all: number[] = [];
+          for (const w of original) {
+            const idx = WORDLIST.indexOf(w);
+            for (let i = 10; i >= 0; i--) all.push((idx >> i) & 1);
+          }
+          return all.slice(128);
+        })(),
+      );
+      expect(shown).toHaveLength(132);
+
+      let survivors = 0;
+      for (let bit = 0; bit < 128; bit++) {
+        const mutated = shown.slice();
+        mutated[bit] ^= 1;
+        const changed = wordsOf(mutated);
+        const differing = changed.filter((w, i) => w !== original[i]).length;
+        expect(differing, 'one bit flip must change exactly one word').toBe(1);
+        if (validateMnemonic(changed.join(' '), WORDLIST)) survivors++;
+      }
+      expect(
+        survivors,
+        `trial ${t}: no single-bit corruption slipped past the checksum, so the ` +
+          '"find a change the checksum misses" control would have nothing to find',
+      ).toBeGreaterThan(0);
+      trialsWithSurvivors++;
+    }
+    expect(trialsWithSurvivors, 'the loop must actually have run').toBe(8);
+  });
+});
+
+// ===========================================================================
+// BIP-32 boundary conditions the spec names but the real HMAC never reaches
+// ===========================================================================
+describe('BIP-32 invalid-key branches fail closed instead of wrapping', () => {
+  const seed = hexToBytes('000102030405060708090a0b0c0d0e0f');
+  const N = secp.CURVE.n;
+
+  /** An HMAC stub whose left half is a chosen scalar and right half is fixed. */
+  function stubHmac(ilValue: bigint) {
+    return () => {
+      const out = new Uint8Array(64);
+      out.set(hexToBytes(ilValue.toString(16).padStart(64, '0')), 0);
+      out.fill(0x11, 32);
+      return out;
+    };
+  }
+
+  it('rejects a master key with parse256(IL) = 0, naming BIP-32', () => {
+    expect(() => masterKeyFromSeed(seed, stubHmac(0n))).toThrow(/invalid BIP-32 master key/);
+  });
+
+  it('rejects a master key with parse256(IL) >= n, naming BIP-32', () => {
+    expect(() => masterKeyFromSeed(seed, stubHmac(N))).toThrow(/invalid BIP-32 master key/);
+    expect(() => masterKeyFromSeed(seed, stubHmac(N + 5n))).toThrow(/invalid BIP-32 master key/);
+  });
+
+  it('accepts the boundary value n - 1, so the guard is not off by one', () => {
+    const key = masterKeyFromSeed(seed, stubHmac(N - 1n));
+    expect(key.privateKey).toHaveLength(32);
+    expect(key.publicKey).toHaveLength(33);
+  });
+
+  it('an always-invalid normal derivation stops at 0x7fffffff instead of crossing into hardened', () => {
+    const m = masterKeyFromSeed(seed);
+    // Every candidate invalid: IL >= n on every call.
+    const alwaysInvalid = stubHmac(N);
+    expect(() => deriveChild(m, 0x7ffffffe, alwaysInvalid)).toThrow(
+      /no valid child index remains .* 2147483647 \(the top of the normal range\)/,
+    );
+  });
+
+  it('an always-invalid hardened derivation stops at 0xffffffff instead of wrapping to 0', () => {
+    const m = masterKeyFromSeed(seed);
+    const alwaysInvalid = stubHmac(N);
+    expect(() => deriveChild(m, 0xfffffffe, alwaysInvalid)).toThrow(
+      /no valid child index remains .* 4294967295 \(the top of the hardened range\)/,
+    );
+  });
+
+  it('a valid retry still advances by one and reports the index it used', () => {
+    const m = masterKeyFromSeed(seed);
+    let call = 0;
+    const invalidOnce = () => {
+      call++;
+      const out = new Uint8Array(64);
+      // First call: IL >= n (invalid). Second: a small valid scalar.
+      out.set(hexToBytes((call === 1 ? N : 42n).toString(16).padStart(64, '0')), 0);
+      out.fill(0x22, 32);
+      return out;
+    };
+    const child = deriveChild(m, 5, invalidOnce);
+    expect(child.index).toBe(6);
+    expect(call).toBe(2);
+  });
+});
+
+describe('extended-key serialization refuses to truncate', () => {
+  const seed = hexToBytes('000102030405060708090a0b0c0d0e0f');
+
+  it('rejects depth 256 rather than serializing it as a master key', () => {
+    const key = masterKeyFromSeed(seed);
+    const deep = { ...key, depth: 256 };
+    // The old code wrote `depth & 0xff` = 0, producing a well-formed extended
+    // key claiming depth 0 — indistinguishable from the master.
+    expect(() => serializeXprv(deep)).toThrow(/depth field is one byte/);
+    expect(() => serializeXpub(deep)).toThrow(/depth field is one byte/);
+    // 255 is the last legal value and must still work.
+    expect(serializeXprv({ ...key, depth: 255 })).toMatch(/^xprv/);
+  });
+
+  it('rejects an out-of-range child index and a short chain code', () => {
+    const key = masterKeyFromSeed(seed);
+    expect(() => serializeXpub({ ...key, index: 0x100000000 })).toThrow(/index field is a uint32/);
+    expect(() => serializeXprv({ ...key, chainCode: new Uint8Array(31) })).toThrow(/31-byte chain code/);
+  });
+});

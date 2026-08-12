@@ -189,6 +189,24 @@ export interface Bip39Strip {
    *  the checksum, because a single flip only breaks it with probability
    *  1 - 2^-CS. Returns the new last word. */
   mangleLast(): string;
+  /**
+   * The counterweight to `mangleLast`, and the reason it needs one.
+   *
+   * `mangleLast` searches for a corruption the checksum CATCHES, which quietly
+   * makes the page's demonstration agree with the claim that a wrong word always
+   * fails validation. It does not. A 12-word phrase carries 4 checksum bits, so
+   * a wrong word passes about 1 time in 16 — measured with this repo's own
+   * engine, 61,141 of 982,560 single-word substitutions across 40 random phrases
+   * (6.22%) still validate, and the rate is flat across all twelve positions
+   * (~128 of the other 2,047 words at every position).
+   *
+   * This searches for one of those. Each entropy bit belongs to exactly one
+   * 11-bit band, so a single bit flip changes exactly one word; among the 128
+   * candidates about 8 leave the displayed checksum bits still correct. Returns
+   * the changed word and its position, or null if — astronomically unlikely —
+   * no single flip survives.
+   */
+  mangleUndetected(): { word: string; position: number; candidates: number } | null;
 }
 
 // Band palette — 12 hues cycled so adjacent bands are visually distinct.
@@ -282,7 +300,7 @@ export function bip39Strip(wordlist: string[]): Bip39Strip {
       e('span', {
         class: 'bip39-checknote',
         text: valid
-          ? ' — the last word encodes the SHA-256 checksum of the entropy, so this phrase would be accepted.'
+          ? ' — the final band carries 7 entropy bits plus the 4-bit SHA-256 checksum of the entropy, and those 4 bits match, so a wallet would accept this phrase. Accepted is not the same as correct: only 4 bits are checked.'
           : ' — a flipped bit changed the entropy without fixing the checksum band, so a wallet rejects this phrase (last band value ' + csVal + ').',
       }),
     );
@@ -401,5 +419,27 @@ export function bip39Strip(wordlist: string[]): Bip39Strip {
     return wordlist[bandValue(lastBand)] ?? '?';
   }
 
-  return { root, render, getWords, isValid: currentChecksumValid, mangleLast };
+  function mangleUndetected(): { word: string; position: number; candidates: number } | null {
+    // Count every single-bit flip the checksum would miss, then take the first.
+    // Counting rather than short-circuiting is deliberate: the number is the
+    // teaching point, and it is the number the caller prints.
+    const survivors: number[] = [];
+    for (let idx = 0; idx < entropyLen; idx++) {
+      bits[idx] ^= 1;
+      const stillValid = currentChecksumValid();
+      bits[idx] ^= 1;
+      if (stillValid) survivors.push(idx);
+    }
+    if (survivors.length === 0) return null;
+    const chosen = survivors[0];
+    const band = Math.floor(chosen / 11);
+    flipBit(chosen);
+    return {
+      word: wordlist[bandValue(band)] ?? '?',
+      position: band + 1,
+      candidates: survivors.length,
+    };
+  }
+
+  return { root, render, getWords, isValid: currentChecksumValid, mangleLast, mangleUndetected };
 }

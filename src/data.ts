@@ -12,7 +12,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     ordinal: 1,
     label: 'Private key (32 random bytes)',
     detail:
-      'A Bitcoin private key is just 256 bits of randomness, interpreted as an integer on the secp256k1 curve. Whoever knows it can sign — so it is the entire secret behind a Bitcoin address.',
+      'A wallet draws 256-bit candidates until one lands in the range secp256k1 accepts: an integer from 1 up to the group order n minus one. Not every 256-bit string qualifies — values of 0 or n and above are rejected and redrawn (which, at n ≈ 2^256 − 2^129, essentially never happens). Whoever knows the accepted integer can sign, so it is the entire secret behind a Bitcoin address.',
   },
   {
     ordinal: 2,
@@ -57,7 +57,7 @@ export const SEED_STEPS: SeedStep[] = [
     ordinal: 2,
     label: 'Append a SHA-256 checksum',
     detail:
-      'Take the first ENT/32 bits of SHA-256(entropy) and append them. The last word is therefore a checksum word — typing one wrong word makes the whole phrase fail to validate.',
+      'Take the first ENT/32 bits of SHA-256(entropy) and append them. For a 12-word phrase that is 4 checksum bits, so the final word carries 7 entropy bits plus those 4 — it is not a pure checksum word. Four bits catch most typos but not all: measured over 982,560 single-word substitutions on 40 random phrases, 61,141 of them (6.22%, about 1 in 16) still validate. A valid checksum means the phrase was probably typed cleanly, not that it is the phrase you wrote down.',
   },
   {
     ordinal: 3,
@@ -75,7 +75,7 @@ export const SEED_STEPS: SeedStep[] = [
     ordinal: 5,
     label: 'Seed → BIP-32 master key',
     detail:
-      "HMAC-SHA512 the seed with the key 'Bitcoin seed'. Left 32 bytes are the master private key; right 32 bytes are the chain code that authorises future derivations.",
+      "HMAC-SHA512 the seed with the key 'Bitcoin seed'. Left 32 bytes are the master private key; right 32 bytes are the chain code, the extra HMAC material mixed into every child derivation. It is not an authorisation token — it carries no permission, it just makes each branch's key schedule distinct.",
   },
   {
     ordinal: 6,
@@ -108,8 +108,8 @@ export const CONCEPTS: ConceptCard[] = [
     body: "Normal children can be derived from the parent public key, which is why an xpub can hand out fresh addresses without exposing any private key. Hardened children (m/44'/…') require the parent private key, breaking that chain — used at account boundaries so leaking one account does not leak siblings.",
   },
   {
-    title: 'xpub can watch, only the seed can spend',
-    body: 'Sharing an extended public key lets a service derive your receive addresses and see deposits, without ever being able to sign a spend. Only the seed (or a hardware wallet holding it) can produce signatures. This is how watch-only wallets work.',
+    title: 'An xpub cannot sign — but plenty of other things can',
+    body: 'Sharing an extended public key lets a service derive every non-hardened descendant address and watch deposits, without being able to sign. That is how watch-only wallets work. It does not mean only the seed can spend: any private key below it spends its own outputs, and an xprv spends everything under it — this page prints exactly such a child private key and WIF in the derivation panel below. An xpub is also privacy-sensitive in its own right, because it reveals the whole derivable address graph.',
   },
   {
     title: 'P2PKH vs P2WPKH',
@@ -132,8 +132,8 @@ export const SAFETY: SafetyCard[] = [
     body: 'Any page that asks for your 12 or 24 words is, with overwhelming likelihood, trying to steal your wallet. Real wallets do recovery offline, on the device that holds the seed. This page can take a mnemonic so you can see the checksum check — never paste a phrase that controls real funds.',
   },
   {
-    title: 'The seed IS the money',
-    body: 'Self-custody is total: anyone who knows the words can move the coins, and there is no support line that can reverse a theft. Back the phrase up on paper or steel, not in a screenshot, cloud note, or password manager that syncs to a hacked phone.',
+    title: 'Every layer below the words can spend too',
+    body: 'The chain is entropy → words (+ optional passphrase) → 64-byte seed → BIP-32 master key → child keys → signatures, and each layer is enough to move whatever hangs below it. Anyone with the words takes everything; anyone with one leaked child key takes that address\u2019s coins without ever seeing the words. There is no support line that can reverse a theft. Back the phrase up on paper or steel, not in a screenshot, cloud note, or password manager that syncs to a hacked phone.',
   },
   {
     title: 'The checksum is typo protection, not security',
@@ -142,6 +142,30 @@ export const SAFETY: SafetyCard[] = [
 ];
 
 export const DEFAULT_DERIVATION_PATH = "m/44'/0'/0'/0/0";
+
+/**
+ * BIP-43 purpose subtrees.
+ *
+ * This lab derives every key from the BIP-44 tree above and then shows the leaf
+ * encoded BOTH as P2PKH and as P2WPKH, because the point of the Key -> Address
+ * panel is that one HASH160 has two encodings. That is true of the encoding and
+ * false of wallet practice: a real wallet keeps output types in separate purpose
+ * subtrees so recovery software knows which type to scan for. A `bc1q...` address
+ * derived under `44'` is a valid address that a restored wallet would very likely
+ * never look for. This table is the correction, shown beside the derived one.
+ */
+export interface PurposePath {
+  purpose: string;
+  name: string;
+  path: string;
+  address: string;
+}
+export const PURPOSE_PATHS: PurposePath[] = [
+  { purpose: "44'", name: 'Legacy', path: "m/44'/0'/0'/0/i", address: '1\u2026 P2PKH' },
+  { purpose: "49'", name: 'Nested SegWit', path: "m/49'/0'/0'/0/i", address: '3\u2026 P2SH-P2WPKH' },
+  { purpose: "84'", name: 'Native SegWit', path: "m/84'/0'/0'/0/i", address: 'bc1q\u2026 P2WPKH' },
+  { purpose: "86'", name: 'Taproot', path: "m/86'/0'/0'/0/i", address: 'bc1p\u2026 P2TR' },
+];
 
 // Per-step gloss of the BIP-44 layout for the derivation-tree visual.
 export interface PathStep {

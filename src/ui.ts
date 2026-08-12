@@ -21,6 +21,7 @@ import {
   CONCEPTS,
   SAFETY,
   PATH_STEPS,
+  PURPOSE_PATHS,
   DEFAULT_DERIVATION_PATH,
   SCRIPTURE_TEXT,
   SCRIPTURE_CITATION,
@@ -426,11 +427,11 @@ function renderDerivationTree(): HTMLElement {
 function renderMemorizeMode(getWords: () => string[]): HTMLElement {
   const card = el('div', { class: 'panel-card memorize-card' });
   card.append(
-    el('h3', { class: 'card-title', text: 'Test yourself' }),
+    el('h3', { class: 'card-title', text: 'Verify your written backup' }),
     el('p', {
       class: 'memorize-help',
       text:
-        'A backup you cannot recall is no backup. Generate a mnemonic above, then click Start — the words hide and reappear shuffled below. Click them in the right order. Real wallets walk users through this exact drill on first setup.',
+        'Write the phrase down first, then click Start \u2014 the words hide and reappear shuffled below, and you click them back in order against your copy. Wallets run a confirmation step like this at setup to catch a backup that was recorded wrong. It is a check on what you wrote, not advice to rely on memory: a phrase that lives only in your head has no backup at all.',
     }),
   );
 
@@ -549,7 +550,7 @@ function renderAddressList(getSeed: () => Uint8Array | null, basePath: string): 
     el('h3', { class: 'card-title', text: 'Your first five receive addresses' }),
     el('p', {
       class: 'address-list-help',
-      text: `Same seed, indices 0–4 of ${basePath.replace(/\/\d+$/, '/n')}. Wallets call .getNextAddress() exactly this way — a fresh address every time, all from one backup.`,
+      text: `Same seed, indices 0\u20134 of ${basePath.replace(/\/\d+$/, '/n')} \u2014 bumping the last segment is exactly how a wallet hands out a fresh receive address from one backup.`,
     }),
   );
 
@@ -599,6 +600,49 @@ function renderAddressList(getSeed: () => Uint8Array | null, basePath: string): 
       tbody.append(row);
     }
   }
+
+  // The bc1 column is derived from the BIP-44 tree, and that is not what a real
+  // wallet does. Say so here rather than letting the table imply otherwise: the
+  // page's own path gloss already calls 44' "a P2PKH-style account tree".
+  const purposeNote = el('div', { class: 'purpose-note' });
+  purposeNote.append(
+    el('p', {
+      class: 'address-list-help',
+      html:
+        'Both columns come from <span class="mono">' +
+        basePath.replace(/\/\d+$/, '/n') +
+        '</span>, the BIP-44 <em>legacy</em> subtree \u2014 which shows that one HASH160 has two encodings, ' +
+        'but is <strong>not</strong> how wallets are laid out. Real wallets keep each output type in its own ' +
+        'purpose subtree so recovery software knows which type to scan for, and a <span class="mono">bc1q\u2026</span> ' +
+        'address derived under <span class="mono">44\u2019</span> is a perfectly valid address a restored wallet ' +
+        'would very likely never look for. This lab implements the <span class="mono">44\u2019</span> row only:',
+    }),
+  );
+  const purposeTable = el('table', { class: 'math-table purpose-table' });
+  purposeTable.append(
+    el('thead', {}, [
+      el('tr', {}, [
+        el('th', { text: 'Purpose' }),
+        el('th', { text: 'Account type' }),
+        el('th', { text: 'Standard path' }),
+        el('th', { text: 'Address' }),
+      ]),
+    ]),
+  );
+  const purposeBody = el('tbody', {});
+  for (const row of PURPOSE_PATHS) {
+    const tr = el('tr', { 'data-purpose': row.purpose });
+    tr.append(
+      el('td', { class: 'mono', text: row.purpose }),
+      el('td', { text: row.name }),
+      el('td', { class: 'mono', text: row.path }),
+      el('td', { class: 'mono', text: row.address }),
+    );
+    purposeBody.append(tr);
+  }
+  purposeTable.append(purposeBody);
+  purposeNote.append(el('div', { class: 'table-wrap', tabindex: '0' }, [purposeTable]));
+  card.append(purposeNote);
 
   refresh();
   return Object.assign(card, { refresh });
@@ -693,8 +737,23 @@ function renderSeedSection(): HTMLElement {
     'aria-label': 'Swap the last word for a wrong one and watch the checksum reject the phrase',
     disabled: true,
   });
-  stripHead.append(mangleBtn);
+  // The counterweight to "Mangle the last word". That button searches for a
+  // corruption the checksum CATCHES, which made the page's own demonstration
+  // agree with a claim that is false: a wrong word passes about 1 time in 16.
+  // This one searches for a corruption the checksum MISSES, and there is always
+  // one to find (about 8 of the 128 single-bit flips survive).
+  const missBtn = el('button', {
+    type: 'button',
+    class: 'secondary bip39-miss-btn',
+    text: 'Find a change the checksum misses',
+    'aria-label':
+      'Change one word in a way the 4-bit checksum does not detect, so the phrase still passes',
+    disabled: true,
+  });
+  stripHead.append(mangleBtn, missBtn);
   stripCard.append(stripHead, strip.root);
+  const missNote = el('p', { class: 'bip39-miss-note', hidden: true, 'aria-live': 'polite' });
+  stripCard.append(missNote);
   section.append(stripCard);
 
   // Memorize-and-test (Item 7)
@@ -822,6 +881,9 @@ function renderSeedSection(): HTMLElement {
     if (entropy) {
       strip.render(entropy);
       mangleBtn.disabled = false;
+      missBtn.disabled = false;
+      missNote.hidden = true;
+      missNote.textContent = '';
     }
 
     wordGrid.replaceChildren();
@@ -928,6 +990,35 @@ function renderSeedSection(): HTMLElement {
       ok
         ? `Last word changed to ${newLast}, but this phrase still happens to carry a valid checksum.`
         : `Last word changed to ${newLast}. The BIP-39 checksum now fails — a real wallet would reject this phrase.`,
+    );
+  });
+
+  // The honest half of the checksum lesson: a corruption the 4 bits do not see.
+  missBtn.addEventListener('click', () => {
+    if (!state.mnemonic) return;
+    const before = strip.getWords();
+    const hit = strip.mangleUndetected();
+    if (!hit) {
+      missNote.hidden = false;
+      missNote.textContent =
+        'No single-bit change to this phrase slips past the checksum \u2014 that happens with ' +
+        'probability about 2^-8 per phrase. Generate another and try again.';
+      announce('No undetected single-word change exists for this phrase.');
+      return;
+    }
+    const changed = strip.getWords().join(' ');
+    validateInput.value = changed;
+    const ok = validateMnemonic(changed, WORDLIST);
+    paintValidateVerdict(changed, ok);
+    missNote.hidden = false;
+    missNote.textContent =
+      `Word ${hit.position} changed from "${before[hit.position - 1]}" to "${hit.word}" \u2014 a different ` +
+      `phrase, a different wallet, and the checksum still says valid. ${hit.candidates} of the 128 ` +
+      'single-bit changes to this phrase are invisible to it, because only 4 bits are checked. ' +
+      'A valid checksum means the phrase was probably typed cleanly; it is not proof that it is your phrase.';
+    announce(
+      `Word ${hit.position} changed to ${hit.word} and the checksum still validates. ` +
+        'The checksum detects most typos, not all of them.',
     );
   });
 
