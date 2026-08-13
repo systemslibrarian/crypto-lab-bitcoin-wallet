@@ -167,9 +167,11 @@ function copyRow(label: string, value: string): HTMLElement {
 function qrPanel(label: string, value: string): HTMLElement {
   const card = el('div', { class: 'qr-card' });
   card.append(el('h4', { class: 'qr-card-title', text: label }));
+  // Defaults give the ISO-required 4-module quiet zone and fixed
+  // black-on-white colors — the SVG must not inherit theme colors, because an
+  // inverted (light-on-dark) symbol fails in many scanners.
   const svg = renderQRSVG(encodeQR(value), {
     size: 168,
-    quietZone: 3,
     ariaLabel: `${label} QR code`,
   });
   const holder = el('div', { class: 'qr-svg', html: svg });

@@ -114,6 +114,23 @@ function convertBits(data: Uint8Array, from: number, to: number, pad: boolean): 
     return ret;
 }
 export function bech32Address(witnessProgram: Uint8Array, hrp = 'bc', version = 0): string {
+    // This encoder computes the ORIGINAL Bech32 checksum (constant 1), which
+    // BIP-350 makes wrong for witness versions 1-16 — those require Bech32m
+    // (constant 0x2bc830a3). Accepting `version` silently would produce a
+    // syntactically plausible address that every conforming decoder rejects,
+    // so refuse anything but v0, and hold v0 programs to the BIP-141 lengths
+    // (20 bytes P2WPKH, 32 bytes P2WSH).
+    if (version !== 0) {
+        throw new Error(
+            `witness version ${version} requires Bech32m (BIP-350); this encoder implements only the ` +
+            'original Bech32 checksum, which is valid solely for witness version 0',
+        );
+    }
+    if (witnessProgram.length !== 20 && witnessProgram.length !== 32) {
+        throw new Error(
+            `invalid witness-v0 program length ${witnessProgram.length} — must be 20 (P2WPKH) or 32 (P2WSH)`,
+        );
+    }
     const data = [version].concat(convertBits(witnessProgram, 8, 5, true));
     const checksum = bech32Checksum(hrp, data);
     const combined = data.concat(checksum);

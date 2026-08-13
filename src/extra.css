@@ -170,17 +170,14 @@
   text-transform: uppercase;
 }
 .qr-svg {
-  background: var(--bg);
+  /* The SVG paints its own white background and black modules — scanners
+     reject inverted symbols — so the frame stays white in every theme and
+     extends the quiet zone instead of ringing it in a dark border. */
+  background: #ffffff;
   padding: 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
-  /* The SVG path uses currentColor, so module color follows ink-strong */
-  color: var(--ink-strong);
   line-height: 0;
-}
-[data-theme='light'] .qr-svg {
-  background: #ffffff;
-  color: #000000;
 }
 .qr-card-value {
   font-size: 11.5px;

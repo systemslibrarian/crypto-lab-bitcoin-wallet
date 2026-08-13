@@ -394,18 +394,24 @@ export function encodeQR(text: string): QRMatrix {
 // ---- SVG render ----
 export interface QRRenderOpts {
   size?: number; // pixel size of the SVG
-  quietZone?: number; // modules of quiet zone (default 2)
-  darkColor?: string; // CSS color (default currentColor)
-  lightColor?: string; // CSS color (default transparent)
+  quietZone?: number; // modules of quiet zone (default 4, the ISO/IEC 18004 minimum)
+  darkColor?: string; // CSS color (default #000000)
+  lightColor?: string; // CSS color (default #ffffff)
   ariaLabel?: string;
 }
 
 export function renderQRSVG(matrix: QRMatrix, opts: QRRenderOpts = {}): string {
-  const quiet = opts.quietZone ?? 2;
+  // ISO/IEC 18004 requires a quiet zone of at least 4 modules, and dark
+  // modules on a light background. The old defaults were 2 modules of quiet
+  // zone and currentColor-on-transparent, which let the page theme invert the
+  // symbol — light modules on a dark panel — and inverted QR codes are
+  // rejected by many scanners. The symbol now carries its own colors so no
+  // surrounding CSS can invert it.
+  const quiet = opts.quietZone ?? 4;
   const dim = matrix.size + 2 * quiet;
   const px = opts.size ?? 200;
-  const dark = opts.darkColor ?? 'currentColor';
-  const light = opts.lightColor ?? 'transparent';
+  const dark = opts.darkColor ?? '#000000';
+  const light = opts.lightColor ?? '#ffffff';
   const label = opts.ariaLabel ?? 'QR code';
   // Build one path of all dark modules (much smaller than per-rect SVG)
   let path = '';

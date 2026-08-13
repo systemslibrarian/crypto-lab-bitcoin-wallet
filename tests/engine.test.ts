@@ -70,6 +70,22 @@ describe('Base58Check / address pipeline (known answers)', () => {
     const wp = hexToBytes('751e76e8199196d454941c45d1b3a323f1433bd6');
     expect(bech32Address(wp, 'bc', 0)).toBe('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4');
   });
+
+  it('bech32 refuses witness versions above 0 — they require Bech32m (BIP-350)', () => {
+    // This encoder computes the original Bech32 checksum, which is only valid
+    // for witness v0. Encoding v1 with it would yield a plausible-looking
+    // bc1p… string that every conforming decoder rejects.
+    const wp = new Uint8Array(32);
+    expect(() => bech32Address(wp, 'bc', 1)).toThrow(/Bech32m/);
+    expect(() => bech32Address(wp, 'bc', 16)).toThrow(/Bech32m/);
+  });
+
+  it('bech32 refuses witness-v0 programs that are not 20 or 32 bytes', () => {
+    expect(() => bech32Address(new Uint8Array(19), 'bc', 0)).toThrow(/program length/);
+    expect(() => bech32Address(new Uint8Array(21), 'bc', 0)).toThrow(/program length/);
+    // 32 bytes (P2WSH) remains valid under BIP-141.
+    expect(() => bech32Address(new Uint8Array(32), 'bc', 0)).not.toThrow();
+  });
 });
 
 describe('BIP-39 mnemonic ↔ seed (official Trezor test vectors)', () => {

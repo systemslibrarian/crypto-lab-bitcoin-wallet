@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { sha256 } from '@noble/hashes/sha2';
-import { encodeQR } from '../src/qr';
+import { encodeQR, renderQRSVG } from '../src/qr';
 
 // The QR encoder in src/qr.ts is hand-written, and the two ways it can go wrong
 // (data-module zigzag stepping, format-info placement) both produce a symbol
@@ -176,4 +176,41 @@ describe('QR round-trip: a spec-side reader recovers the payload', () => {
       expect(decodeQR(encodeQR(text))).toBe(text);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// The rendered symbol, not just the matrix. A perfect matrix is still
+// unscannable if the SVG around it shrinks the quiet zone below ISO/IEC
+// 18004's 4 modules or lets the page theme invert the colors (light modules
+// on a dark panel fail in many scanners).
+// ---------------------------------------------------------------------------
+describe('rendered SVG: quiet zone and fixed colors', () => {
+  const matrix = encodeQR('1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH');
+
+  it('defaults to a 4-module quiet zone on every side', () => {
+    const svg = renderQRSVG(matrix);
+    const dim = matrix.size + 2 * 4;
+    expect(svg).toContain(`viewBox="0 0 ${dim} ${dim}"`);
+    // No dark module may be drawn inside the quiet zone: every path segment
+    // starts at coordinates >= 4 and < size + 4.
+    for (const m of svg.matchAll(/M(\d+),(\d+)h1v1h-1z/g)) {
+      const x = Number(m[1]);
+      const y = Number(m[2]);
+      expect(x).toBeGreaterThanOrEqual(4);
+      expect(y).toBeGreaterThanOrEqual(4);
+      expect(x).toBeLessThan(matrix.size + 4);
+      expect(y).toBeLessThan(matrix.size + 4);
+    }
+  });
+
+  it('paints an explicit light background and dark modules, ignoring theme colors', () => {
+    const svg = renderQRSVG(matrix);
+    const dim = matrix.size + 2 * 4;
+    // A full-bleed white rect covers the symbol AND its quiet zone…
+    expect(svg).toContain(`<rect width="${dim}" height="${dim}" fill="#ffffff"/>`);
+    // …and the modules are literal black, never currentColor, so no
+    // surrounding CSS can invert the symbol.
+    expect(svg).toContain('fill="#000000"');
+    expect(svg).not.toContain('currentColor');
+  });
 });
