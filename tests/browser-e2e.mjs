@@ -180,16 +180,10 @@ async function main() {
     const drillStatus = await page.$eval('.memorize-status', (el) => el.textContent);
     assert('Memorize drill completes with all-correct', /perfect/i.test(drillStatus || ''));
 
-    // ---- Theme toggle persistence ----
-    await page.click('#theme-toggle');
-    const themeAfter = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
-    assert('Theme toggles to light', themeAfter === 'light');
+    // ---- Dark is the only theme, and it survives a reload ----
     await page.reload({ waitUntil: 'networkidle2' });
     const themePersist = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
-    assert('Theme persists across reload', themePersist === 'light');
-
-    // Flip back to dark so subsequent screenshots / axe run is in dark mode.
-    await page.click('#theme-toggle');
+    assert('Dark theme persists across reload', themePersist === 'dark');
 
     // ---- Mobile no-horizontal-overflow ----
     await page.setViewport({ width: 375, height: 800 });

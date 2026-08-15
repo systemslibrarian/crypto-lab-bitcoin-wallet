@@ -812,25 +812,6 @@ test('the drill counts placed words consistently, names a wrong word, and can be
   await expect(status).toHaveText('Drill started — click the words in order.');
 });
 
-// ===========================================================================
-// 10. A control elsewhere must not invalidate a computed verdict
-// ===========================================================================
-test('toggling the theme leaves the derived values and the vector badges exactly as computed', async ({
-  page,
-}) => {
-  await page.goto('.');
-  await generateMnemonic(page);
-  const before = await readPipeline(page);
-  const derivedBefore = await derivedRows(page).locator('.copy-row-value').allInnerTexts();
-
-  await page.locator('#cl-theme-toggle').click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-
-  expect(await readPipeline(page)).toEqual(before);
-  expect(await derivedRows(page).locator('.copy-row-value').allInnerTexts()).toEqual(derivedBefore);
-  await expect(page.locator('.kat-item .scenario-status--valid')).toHaveCount(3);
-  await expect(page.locator('.scenario-status--invalid')).toHaveCount(0);
-});
 
 // ===========================================================================
 // 11. The `[hidden]` override trap
