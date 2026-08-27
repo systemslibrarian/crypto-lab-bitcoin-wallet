@@ -24,7 +24,7 @@
     "axe-core": "^4.12.0",
     "puppeteer": "^25.7.0",
     "typescript": "^5.4.5",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vitest": "^4.1.10"
   },
   "allowScripts": {
