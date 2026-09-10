@@ -20,9 +20,9 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@axe-core/puppeteer": "^4.13.0",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "axe-core": "^4.12.0",
-    "puppeteer": "^25.9.0",
+    "puppeteer": "^25.10.0",
     "typescript": "^5.4.5",
     "vite": "^8.2.2",
     "vitest": "^4.1.10"
