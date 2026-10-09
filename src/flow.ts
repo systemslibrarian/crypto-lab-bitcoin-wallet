@@ -9,7 +9,7 @@
 // All crypto is delegated to engine.ts. No hardcoded outputs.
 
 import { sha256Once, hash160, bytesToHex } from './engine';
-import { sha256 } from '@noble/hashes/sha2';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 // Minimal DOM helper (kept local so flow.ts has no dependency on ui.ts).
 type Attrs = Record<string, string | number | boolean | undefined> & { text?: string };

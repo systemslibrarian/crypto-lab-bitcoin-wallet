@@ -7,10 +7,10 @@
 // hold real funds — entropy and storage here are for learning only.
 
 import * as secp from '@noble/secp256k1';
-import { sha256 } from '@noble/hashes/sha2';
-import { ripemd160 } from '@noble/hashes/legacy';
-import { hmac } from '@noble/hashes/hmac';
-import { pbkdf2 } from '@noble/hashes/pbkdf2';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { ripemd160 } from '@noble/hashes/legacy.js';
+import { hmac } from '@noble/hashes/hmac.js';
+import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
 
 // ---- helpers ----
 export function bytesToHex(b: Uint8Array): string {
@@ -173,7 +173,7 @@ export function deriveAddress(priv: Uint8Array): AddressBundle {
 }
 
 export function randomPrivateKey(): Uint8Array {
-    return secp.utils.randomPrivateKey();
+    return secp.utils.randomSecretKey();
 }
 
 // ---- BIP-39 mnemonic -> seed ----
@@ -187,7 +187,7 @@ export function mnemonicToSeed(mnemonic: string, passphrase = ''): Uint8Array {
 }
 
 // import sha512 lazily to keep the import list tidy
-import { sha512 } from '@noble/hashes/sha2';
+import { sha512 } from '@noble/hashes/sha2.js';
 const sha512Hash = sha512;
 
 // entropy -> mnemonic (BIP-39). entropy length must be 16/20/24/28/32 bytes.
@@ -231,7 +231,7 @@ export function validateMnemonic(mnemonic: string, wordlist: string[]): boolean 
 }
 
 // ---- BIP-32 HD derivation ----
-const N = secp.CURVE.n;
+const N = secp.Point.CURVE().n;
 
 export interface HDKey {
     privateKey: Uint8Array;

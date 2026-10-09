@@ -14,8 +14,8 @@
     "test:legacy-e2e": "node tests/browser-e2e.mjs"
   },
   "dependencies": {
-    "@noble/hashes": "^1.5.0",
-    "@noble/secp256k1": "^2.1.0"
+    "@noble/hashes": "^2.4.0",
+    "@noble/secp256k1": "^3.2.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -29,5 +29,8 @@
   },
   "allowScripts": {
     "puppeteer@25.1.0": true
+  },
+  "engines": {
+    "node": "^22.19.0 || ^24.0.0 || >=26.0.0"
   }
 }

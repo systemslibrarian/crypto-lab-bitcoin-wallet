@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sha256 } from '@noble/hashes/sha2';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { encodeQR, renderQRSVG } from '../src/qr';
 
 // The QR encoder in src/qr.ts is hand-written, and the two ways it can go wrong

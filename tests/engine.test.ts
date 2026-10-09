@@ -258,7 +258,7 @@ describe('BIP-32 CKDpriv edge-case handling (IL >= n or child == 0 → skip inde
   // an injectable HMAC purely so the contract can be asserted rather than
   // assumed. The production call sites pass nothing and get the real HMAC.
   const seed = hexToBytes('000102030405060708090a0b0c0d0e0f');
-  const N = secp.CURVE.n;
+  const N = secp.Point.CURVE().n;
 
   /** Build a 64-byte I = IL ‖ IR with the requested IL scalar. */
   function fakeI(il: bigint): Uint8Array {
@@ -457,7 +457,7 @@ describe('a valid BIP-39 checksum is not proof the phrase is the intended one', 
 // ===========================================================================
 describe('BIP-32 invalid-key branches fail closed instead of wrapping', () => {
   const seed = hexToBytes('000102030405060708090a0b0c0d0e0f');
-  const N = secp.CURVE.n;
+  const N = secp.Point.CURVE().n;
 
   /** An HMAC stub whose left half is a chosen scalar and right half is fixed. */
   function stubHmac(ilValue: bigint) {
