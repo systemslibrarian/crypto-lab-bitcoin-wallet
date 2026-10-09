@@ -1,5 +1,5 @@
 // tests/browser-e2e.mjs — headless end-to-end verification of the
-// bitcoin-wallet demo. Run with: npm run test:e2e (after `npm run build`).
+// bitcoin-wallet demo. Run with: npm run test:legacy-e2e (after `npm run build`).
 //
 // Spins up `vite preview`, drives a real Chromium, and asserts:
 //   * Page loads, no console errors, skip link present, theme defaults to dark
@@ -56,7 +56,7 @@ async function main() {
   const preview = await startPreview();
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+    browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
 
     page.on('console', (msg) => {
