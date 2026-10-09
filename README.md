@@ -45,6 +45,8 @@ The exhibits are:
 
 ## How to Run Locally
 
+CI uses Node24 and `npm ci` with the paired Noble secp256k1 v3/hashes v2 graph. Official BIP-32/BIP-39 and address known answers, derivation edge cases and independent QR checks remain the correctness gates; library migration does not extend the supported address or wallet-security claims.
+
 ```bash
 git clone https://github.com/systemslibrarian/crypto-lab-bitcoin-wallet
 cd crypto-lab-bitcoin-wallet
