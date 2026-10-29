@@ -321,6 +321,15 @@ export function bip39Strip(wordlist: string[]): Bip39Strip {
     if (cell) {
       cell.textContent = String(bits[idx]);
       cell.setAttribute('aria-pressed', bits[idx] ? 'true' : 'false');
+      // The name states the value, so it has to move with it. Without this the
+      // cell reads "1" while still being named "... value 0 ...", which axe
+      // 4.14 reports as label-content-name-mismatch (WCAG 2.5.3 Label in Name)
+      // -- and only after a flip, which is why the gate failed in the mangled
+      // state and passed on first paint.
+      cell.setAttribute(
+        'aria-label',
+        `Entropy bit ${idx + 1} of 128, value ${bits[idx]}. Activate to flip.`,
+      );
       cell.classList.toggle('bip39-bit--one', bits[idx] === 1);
     }
     const band = Math.floor(idx / 11);

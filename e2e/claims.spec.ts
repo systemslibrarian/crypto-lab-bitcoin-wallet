@@ -325,7 +325,7 @@ test('both addresses provably commit to the HASH160 the page displayed, and a se
   // A second Generate must replace the WHOLE chain, not just the top of it: a
   // stale downstream value would be an address that no longer belongs to the
   // key shown above it.
-  await page.getByRole('button', { name: 'Generate a new private key and derive its address' }).click();
+  await page.getByRole('button', { name: /^Generate key:/ }).click();
   await expect(page.locator('.pipeline-step-value').first()).not.toHaveText(
     new RegExp(first.privHex),
   );

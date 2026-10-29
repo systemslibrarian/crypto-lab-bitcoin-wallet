@@ -129,7 +129,7 @@ export async function boot(page: Page, theme: 'dark' | 'light'): Promise<void> {
 
   // The whole page is built by `src/ui.ts` into an empty `#app`, so a
   // navigation that resolves proves nothing.
-  await expect(page.getByRole('button', { name: /Generate a new private key/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Generate key:/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Generate mnemonic (12 words)' })).toBeVisible();
   // The byte-flow diagram animates its stages in on load and each lands on a
   // real value; waiting for the last stage to leave its em-dash placeholder is
@@ -137,7 +137,7 @@ export async function boot(page: Page, theme: 'dark' | 'light'): Promise<void> {
   // a scan of the settled page rather than of a diagram mid-beat.
   await expect(page.locator('[data-bytes="bech"]')).not.toHaveText('—');
   // Nothing downstream exists yet.
-  await expect(page.getByRole('button', { name: /Swap the last word/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Mangle the last word:/ })).toBeDisabled();
   await expect(page.locator('details[open]')).toHaveCount(0);
 
   await settle(page);
@@ -363,17 +363,17 @@ export async function driveAllStates(page: Page, theme: string): Promise<void> {
   await scanAt('skip link focused');
 
   // ── A private key and its address ────────────────────────────────────────
-  await page.getByRole('button', { name: /Generate a new private key/ }).click();
+  await page.getByRole('button', { name: /^Generate key:/ }).click();
   await expect(page.locator('.key-controls').locator('..')).toBeVisible();
   await scanAt('private key generated and address derived');
 
   // ── The mnemonic, and the bit strip that builds it ───────────────────────
   await page.getByRole('button', { name: 'Generate mnemonic (12 words)' }).click();
-  await expect(page.getByRole('button', { name: /Swap the last word/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Mangle the last word:/ })).toBeEnabled();
   await scanAt('12-word mnemonic generated');
 
   // The checksum refusing a tampered phrase — the claim of the exhibit.
-  await page.getByRole('button', { name: /Swap the last word/ }).click();
+  await page.getByRole('button', { name: /^Mangle the last word:/ }).click();
   await scanAt('last word mangled, checksum rejects');
 
   // ── Validation, both verdicts ────────────────────────────────────────────

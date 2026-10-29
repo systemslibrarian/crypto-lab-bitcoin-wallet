@@ -278,7 +278,7 @@ function renderKeyToAddress(): HTMLElement {
   const generateBtn = el('button', {
     type: 'button',
     text: 'Generate key',
-    'aria-label': 'Generate a new private key and derive its address',
+    'aria-label': 'Generate key: a new private key, and derive its address',
   });
   const warning = el('p', {
     class: 'key-warning',
@@ -736,7 +736,7 @@ function renderSeedSection(): HTMLElement {
     type: 'button',
     class: 'secondary bip39-mangle-btn',
     text: 'Mangle the last word',
-    'aria-label': 'Swap the last word for a wrong one and watch the checksum reject the phrase',
+    'aria-label': 'Mangle the last word: swap it for a wrong one and watch the checksum reject the phrase',
     disabled: true,
   });
   // The counterweight to "Mangle the last word". That button searches for a
@@ -749,7 +749,7 @@ function renderSeedSection(): HTMLElement {
     class: 'secondary bip39-miss-btn',
     text: 'Find a change the checksum misses',
     'aria-label':
-      'Change one word in a way the 4-bit checksum does not detect, so the phrase still passes',
+      'Find a change the checksum misses: change one word in a way the 4-bit checksum does not detect, so the phrase still passes',
     disabled: true,
   });
   stripHead.append(mangleBtn, missBtn);
