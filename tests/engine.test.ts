@@ -19,6 +19,7 @@ import {
   secp,
 } from '../src/engine';
 import { WORDLIST } from '../src/wordlist';
+import { PIPELINE_STEPS, NO_UNDETECTED_CHANGE_NOTE } from '../src/data';
 
 const HARDENED = 0x80000000;
 
@@ -540,5 +541,32 @@ describe('extended-key serialization refuses to truncate', () => {
     const key = masterKeyFromSeed(seed);
     expect(() => serializeXpub({ ...key, index: 0x100000000 })).toThrow(/index field is a uint32/);
     expect(() => serializeXprv({ ...key, chainCode: new Uint8Array(31) })).toThrow(/31-byte chain code/);
+  });
+});
+
+describe('page copy states the two measured odds correctly', () => {
+  it('quotes the secp256k1 order gap at the exponent the curve actually has', () => {
+    // 2^256 - n for secp256k1 is 1.27 x 2^128, i.e. 2^128.35 - so the gap is a
+    // 2^128-scale quantity, not 2^129, and a 256-bit draw is rejected with
+    // probability about 2^-127.7.
+    const n = secp.Point.CURVE().n;
+    const gap = (1n << 256n) - n;
+    expect(gap > 1n << 128n).toBe(true);
+    expect(gap < 2n << 128n).toBe(true);
+    const step = PIPELINE_STEPS.find((s) => s.ordinal === 1)!;
+    expect(step.detail).toContain('n \u2248 2^256 \u2212 2^128');
+    expect(step.detail).not.toContain('2^129');
+  });
+
+  it('quotes the odds that no single-bit change survives the 4 checksum bits', () => {
+    // Each of the 128 entropy bits flips to a phrase the 4-bit checksum still
+    // accepts with probability 1/16, so none of them does with probability
+    // (15/16)^128 = 2.58e-4: about 2^-11.9, one phrase in about 3,900.
+    const p = (15 / 16) ** 128;
+    expect(Math.log2(p)).toBeCloseTo(-11.9, 1);
+    expect(Math.round(1 / p / 100) * 100).toBe(3900);
+    expect(NO_UNDETECTED_CHANGE_NOTE).toContain('1 phrase in 3,900');
+    expect(NO_UNDETECTED_CHANGE_NOTE).toContain('2^-12');
+    expect(NO_UNDETECTED_CHANGE_NOTE).not.toContain('2^-8');
   });
 });

@@ -12,7 +12,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     ordinal: 1,
     label: 'Private key (32 random bytes)',
     detail:
-      'A wallet draws 256-bit candidates until one lands in the range secp256k1 accepts: an integer from 1 up to the group order n minus one. Not every 256-bit string qualifies — values of 0 or n and above are rejected and redrawn (which, at n ≈ 2^256 − 2^129, essentially never happens). Whoever knows the accepted integer can sign, so it is the entire secret behind a Bitcoin address.',
+      'A wallet draws 256-bit candidates until one lands in the range secp256k1 accepts: an integer from 1 up to the group order n minus one. Not every 256-bit string qualifies — values of 0 or n and above are rejected and redrawn (which, at n ≈ 2^256 − 2^128, essentially never happens). Whoever knows the accepted integer can sign, so it is the entire secret behind a Bitcoin address.',
   },
   {
     ordinal: 2,
@@ -212,6 +212,13 @@ export const PATH_STEPS: PathStep[] = [
     hardened: false,
   },
 ];
+
+// Shown when "Find a change the checksum misses" finds none. A 12-word
+// phrase has 4 checksum bits, so each of its 128 single-bit flips survives
+// with probability 1/16 and none survives with probability (15/16)^128 =
+// 2.6e-4, about 2^-12 — one phrase in roughly 3,900.
+export const NO_UNDETECTED_CHANGE_NOTE =
+  'No single-bit change to this phrase slips past the checksum — that happens for about 1 phrase in 3,900 (probability about 2^-12). Generate another and try again.';
 
 export const SCRIPTURE_TEXT =
   '"So whether you eat or drink or whatever you do, do it all for the glory of God."';

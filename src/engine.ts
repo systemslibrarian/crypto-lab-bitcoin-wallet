@@ -1,4 +1,5 @@
-// engine.ts — real Bitcoin wallet mechanics, built on audited @noble libraries.
+// engine.ts — real Bitcoin wallet mechanics, built on the @noble libraries
+// (see README for the audit status of the locked versions).
 // Covers: secp256k1 key -> public key -> address (P2PKH Base58Check & P2WPKH
 // Bech32), BIP-39 mnemonic -> seed, and BIP-32 HD key derivation.
 // Verified against the official BIP-39 / BIP-32 test vectors.

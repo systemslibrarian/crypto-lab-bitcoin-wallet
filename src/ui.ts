@@ -25,6 +25,7 @@ import {
   DEFAULT_DERIVATION_PATH,
   SCRIPTURE_TEXT,
   SCRIPTURE_CITATION,
+  NO_UNDETECTED_CHANGE_NOTE,
 } from './data';
 import { encodeQR, renderQRSVG } from './qr';
 import { byteFlowDiagram, bip39Strip, type ByteFlow, type Bip39Strip } from './flow';
@@ -1002,9 +1003,7 @@ function renderSeedSection(): HTMLElement {
     const hit = strip.mangleUndetected();
     if (!hit) {
       missNote.hidden = false;
-      missNote.textContent =
-        'No single-bit change to this phrase slips past the checksum \u2014 that happens with ' +
-        'probability about 2^-8 per phrase. Generate another and try again.';
+      missNote.textContent = NO_UNDETECTED_CHANGE_NOTE;
       announce('No undetected single-word change exists for this phrase.');
       return;
     }
