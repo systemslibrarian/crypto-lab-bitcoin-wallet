@@ -822,7 +822,7 @@ function renderSeedSection(): HTMLElement {
     el('p', {
       class: 'derive-help',
       text:
-        "After generating a mnemonic above, the path field is unlocked. The default path m/44'/0'/0'/0/0 is the first receive address of the first account of the legacy BIP-44 layout.",
+        "After generating a mnemonic above, the path field is unlocked. Edit the full path to derive that exact key. The receive index edits its final segment and preserves a hardened suffix. The path m selects the master key.",
     }),
   );
 
@@ -916,7 +916,7 @@ function renderSeedSection(): HTMLElement {
     (addressList as unknown as { refresh: () => void }).refresh();
   }
 
-  function derive(): void {
+  function derive(source: 'path' | 'index' = 'path'): void {
     derivedBundle.replaceChildren();
     derivedQrRow.replaceChildren();
     derivedUnify.hidden = true;
@@ -930,20 +930,29 @@ function renderSeedSection(): HTMLElement {
       announce("Invalid path. It must start with m.");
       return;
     }
-    // Number('') is 0 and Number('1.5') is finite, so a blank or fractional
-    // field used to derive a real address under a path the summary printed as
-    // "…/1.5". Require an actual non-negative integer.
-    const rawIndex = indexInput.value.trim();
-    const indexValue = Number(rawIndex);
-    if (rawIndex === '' || !Number.isInteger(indexValue) || indexValue < 0) {
-      derivedSummary.textContent = 'Index must be a non-negative integer.';
-      announce('Index must be a non-negative integer.');
-      return;
-    }
     const parts = basePath.split('/');
-    if (parts.length > 1) {
-      parts[parts.length - 1] = String(indexValue);
-      basePath = parts.join('/');
+    const last = parts[parts.length - 1];
+    const suffix = last.endsWith("'") || last.endsWith('h') ? last.slice(-1) : '';
+    indexInput.disabled = basePath === 'm';
+    if (source === 'index' && !indexInput.disabled) {
+      const rawIndex = indexInput.value.trim();
+      const value = Number(rawIndex);
+      if (rawIndex === '' || !Number.isInteger(value) || value < 0) {
+        derivedSummary.textContent = 'Index must be a non-negative integer.';
+        announce('Index must be a non-negative integer.');
+        return;
+      }
+      if (value >= 2 ** 31) {
+        derivedSummary.textContent = 'Path error: receive index is out of range — the index must be below 2^31.';
+        announce(derivedSummary.textContent);
+        return;
+      }
+      // A receive-index edit only replaces an existing numeric segment.
+      if (parts.length > 1 && /^\d+['h]?$/.test(last)) {
+        parts[parts.length - 1] = String(value) + suffix;
+        basePath = parts.join('/');
+        pathInput.value = basePath;
+      }
     }
     let hdKey: HDKey;
     try {
@@ -953,6 +962,7 @@ function renderSeedSection(): HTMLElement {
       announce('Path error: ' + (err instanceof Error ? err.message : 'unknown'));
       return;
     }
+    if (source === 'path') indexInput.value = basePath === 'm' ? '' : String(Number(suffix ? last.slice(0, -1) : last));
     const bundle = deriveAddress(hdKey.privateKey);
     derivedSummary.textContent = 'Derived along ' + basePath;
     derivedUnify.hidden = false;
@@ -1037,10 +1047,11 @@ function renderSeedSection(): HTMLElement {
     announce(ok ? 'Mnemonic checksum is valid.' : 'Mnemonic is invalid — bad word or checksum.');
   });
 
-  deriveBtn.addEventListener('click', derive);
-  pathInput.addEventListener('change', derive);
-  indexInput.addEventListener('change', derive);
-  indexInput.addEventListener('input', derive);
+  deriveBtn.addEventListener('click', () => derive(!indexInput.disabled && (!indexInput.validity.valid || indexInput.value === '') ? 'index' : 'path'));
+  pathInput.addEventListener('input', () => derive('path'));
+  pathInput.addEventListener('change', () => derive('path'));
+  indexInput.addEventListener('input', () => derive('index'));
+  indexInput.addEventListener('change', () => derive('index'));
 
   return section;
 }

@@ -838,3 +838,28 @@ test('no element carrying the hidden attribute is actually rendered', async ({ p
 
   expect(leaks, `elements marked hidden that still render: ${JSON.stringify(leaks)}`).toEqual([]);
 });
+
+test('the full path and receive index identify the same exact child', async ({ page }) => {
+  await page.goto('.');
+  await generateMnemonic(page);
+  const path = page.locator('#path-input');
+  const index = page.locator('#index-input');
+  const summary = page.locator('.derived-summary');
+  await path.fill('m/garbage');
+  await expect(summary).toContainText('"garbage"');
+  await expect(derivedRows(page)).toHaveCount(0);
+  await expect(page.locator('.derive-card .qr-card')).toHaveCount(0);
+  await path.fill("m/17'");
+  await expect(index).toHaveValue('17');
+  await expect(summary).toHaveText("Derived along m/17'");
+  await index.fill('18');
+  await expect(path).toHaveValue("m/18'");
+  await expect(summary).toHaveText("Derived along m/18'");
+  await index.fill('1.5');
+  await page.getByRole('button', { name: 'Derive address', exact: true }).click();
+  await expect(summary).toHaveText('Index must be a non-negative integer.');
+  await expect(derivedRows(page)).toHaveCount(0);
+  await path.fill('m');
+  await expect(summary).toHaveText('Derived along m');
+  await expect(index).toBeDisabled();
+});
